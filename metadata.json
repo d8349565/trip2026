@@ -1,0 +1,6 @@
+{
+  "name": "旅行足迹",
+  "description": "私有旅行足迹管理工具，支持地图标记、按天行程规划、到访记录、照片时光轴、装备清单和避坑攻略管理。",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,41 @@
+{
+  "users": [
+    {
+      "id": "u_admin",
+      "username": "admin",
+      "role": "admin",
+      "is_active": true,
+      "created_at": "2026-07-14T13:45:57.853Z"
+    },
+    {
+      "id": "u_friend",
+      "username": "traveler",
+      "role": "user",
+      "is_active": true,
+      "created_at": "2026-07-14T13:45:57.853Z"
+    }
+  ],
+  "passwords": {
+    "u_admin": "9f8159dc221821cd91bcc53519c5610f38adb0f3d0706c024e07b66a9811eba8",
+    "u_friend": "6dafa63941bdd6caccbe8611d04be62b34252e78b228fe773f2f05559033e803"
+  },
+  "invites": [
+    {
+      "id": "i_1",
+      "code": "TRIP2026",
+      "max_uses": 10,
+      "uses": 1,
+      "expires_at": "2027-12-31T23:59:59.000Z",
+      "created_at": "2026-07-14T13:45:57.854Z"
+    }
+  ],
+  "places": [],
+  "visits": [],
+  "trips": [],
+  "tripDays": [],
+  "tripItems": [],
+  "media": [],
+  "guides": [],
+  "checklists": [],
+  "checklistItems": []
+}
