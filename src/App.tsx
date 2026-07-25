@@ -232,6 +232,7 @@ export default function App() {
 
   // Creation overlays
   const [mapEditorRequest, setMapEditorRequest] = useState(0);
+  const [showPlaceManager, setShowPlaceManager] = useState(false);
   const [mapEditRequest, setMapEditRequest] = useState<{ token: number; place: Place } | null>(null);
   const [pendingPhotoDraft, setPendingPhotoDraft] = useState<{ token: number; mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string } | null>(null);
 
@@ -1351,12 +1352,53 @@ export default function App() {
                 ★ 精选收藏
               </button>
 
-              <button
-                onClick={requestMapEditor}
-                className="px-3 py-2 rounded-xl text-xs font-bold border border-blue-600 bg-blue-600 text-white shadow-sm whitespace-nowrap"
-              >
-                ＋ 录入 / 管理地点
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowPlaceManager((prev) => !prev)}
+                  className="px-3 py-2 rounded-xl text-xs font-bold border border-blue-600 bg-blue-600 text-white shadow-sm whitespace-nowrap"
+                >
+                  ＋ 录入 / 管理地点
+                </button>
+                {showPlaceManager && (
+                  <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-2xl border border-slate-100 bg-white p-2 shadow-2xl">
+                    <div className="flex items-center justify-between px-2 pb-2 pt-1">
+                      <span className="text-xs font-black text-slate-700">管理地点 ({places.length})</span>
+                      <button
+                        onClick={() => { setShowPlaceManager(false); requestMapEditor(); }}
+                        className="rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-600 hover:bg-blue-100"
+                      >
+                        ＋ 新增地点
+                      </button>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {places.length === 0 ? (
+                        <p className="px-2 py-6 text-center text-xs text-slate-400">还没有地点，点「新增地点」在地图上标记。</p>
+                      ) : (
+                        places.map((place) => (
+                          <div key={place.id} className="group flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-slate-50">
+                            <button
+                              onClick={() => { setShowPlaceManager(false); setSelectedPlace(place); setViewMode('map'); }}
+                              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                            >
+                              <span className="text-base">{CATEGORY_ICONS[place.category_id] ?? '📍'}</span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-xs font-bold text-slate-800">{place.name}</span>
+                                <span className="block truncate text-[10px] text-slate-400">{CATEGORY_LABELS[place.category_id] ?? '地点'}</span>
+                              </span>
+                            </button>
+                            <button
+                              onClick={() => { setShowPlaceManager(false); requestPlaceEdit(place); }}
+                              className="rounded-lg px-2 py-1 text-[11px] font-bold text-slate-500 hover:bg-slate-100 hover:text-blue-600"
+                            >
+                              编辑
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Right side user indicator */}
