@@ -566,7 +566,7 @@ export default function PhotosGallery({
                 </div>
                 <div className="flex items-center gap-1.5 col-span-2 sm:col-span-1">
                   <Compass size={11} className="text-white/30" />
-                  <span>地理位置: {matchedPlace ? `${matchedPlace.latitude.toFixed(4)}, ${matchedPlace.longitude.toFixed(4)}` : '无 EXIF 经纬度'}</span>
+                  <span>地理位置: {matchedPlace ? `${matchedPlace.latitude.toFixed(4)}, ${matchedPlace.longitude.toFixed(4)}` : (Number.isFinite(activeLightboxPhoto.display_latitude) && Number.isFinite(activeLightboxPhoto.display_longitude) ? `${activeLightboxPhoto.display_latitude!.toFixed(4)}, ${activeLightboxPhoto.display_longitude!.toFixed(4)}（未创建标记）` : '无 EXIF 经纬度')}</span>
                 </div>
               </div>
             </div>

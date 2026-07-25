@@ -87,7 +87,11 @@ export default function MobilePhotoDetail({
 
         <div>
           <p className="text-xs text-slate-400 leading-normal">
-            此照片由主管理员于潮州采风实地拍摄，包含 EXIF 安全地理坐标信息。
+            {associatedPlace
+              ? `已关联地点「${associatedPlace.name}」`
+              : (Number.isFinite(photo.display_latitude) && Number.isFinite(photo.display_longitude)
+                  ? `拍摄坐标：${photo.display_latitude!.toFixed(4)}, ${photo.display_longitude!.toFixed(4)}（尚未创建标记）`
+                  : '未检测到位置信息')}
           </p>
         </div>
 
