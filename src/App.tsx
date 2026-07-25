@@ -536,10 +536,11 @@ export default function App() {
         recommended: false,
       }, currentUser?.id);
       setPlaces((current) => [...current, created]);
-      setSelectedPlace(created);
       await api.updateMedia(seed.mediaId, { place_id: created.id });
       setMedia((current) => current.map((item) => item.id === seed.mediaId ? { ...item, place_id: created.id } : item));
       setViewMode('map');
+      // 手机 GPS 常有几十米到上公里偏差：自动进编辑态，让用户拖动蓝色标记修正后再保存。
+      requestPlaceEdit(created);
     } catch (error) {
       console.error('自动创建照片地点失败', error);
       // 兜底：自动建点失败时退回手动流程

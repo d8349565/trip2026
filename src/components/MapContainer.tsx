@@ -190,7 +190,7 @@ export default function MapContainer({
     setEditingId(place.id);
     setDraft({ ...place });
     setContextMenu(null);
-    setMessage('正在编辑已有地点；可拖动蓝色标记调整位置。');
+    setMessage('手机GPS定位常有偏差：拖动蓝色标记到准确位置，再保存。');
     mapRef.current?.setZoomAndCenter(16, [place.longitude, place.latitude]);
   }, [editRequest?.token]);
 
@@ -485,7 +485,7 @@ export default function MapContainer({
     setEditingId(place.id);
     setDraft({ ...place });
     setContextMenu(null);
-    setMessage('正在编辑已有地点；可拖动蓝色标记调整位置。');
+    setMessage('手机GPS定位常有偏差：拖动蓝色标记到准确位置，再保存。');
     mapRef.current?.setZoomAndCenter(16, [place.longitude, place.latitude]);
   };
 
