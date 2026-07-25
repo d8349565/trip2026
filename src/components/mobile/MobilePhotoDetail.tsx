@@ -78,19 +78,12 @@ export default function MobilePhotoDetail({
 
       {/* 3. Bottom Information Panel */}
       <div className="p-5 text-white bg-gradient-to-t from-slate-950 via-slate-900/90 to-transparent space-y-3 shrink-0">
-        {associatedPlace && (
-          <div className="flex items-center gap-2 text-xs font-bold text-blue-400">
-            <MapPin size={13} />
-            <span>关联地点：{associatedPlace.name}</span>
-          </div>
-        )}
-
         <div>
           <p className="text-xs text-slate-400 leading-normal">
             {associatedPlace
-              ? `已关联地点「${associatedPlace.name}」`
+              ? <span className="flex items-center gap-1.5 text-blue-400 font-bold"><MapPin size={12} />{associatedPlace.name}</span>
               : (Number.isFinite(photo.display_latitude) && Number.isFinite(photo.display_longitude)
-                  ? `拍摄坐标：${photo.display_latitude!.toFixed(4)}, ${photo.display_longitude!.toFixed(4)}（尚未创建标记）`
+                  ? `拍摄坐标：${photo.display_latitude!.toFixed(4)}, ${photo.display_longitude!.toFixed(4)}`
                   : '未检测到位置信息')}
           </p>
         </div>

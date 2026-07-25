@@ -570,7 +570,7 @@ export default function MapContainer({
         </div>}
       </div>
 
-      <div className="absolute right-3 top-3 z-30 flex flex-col gap-2">
+      <div className="absolute right-3 top-3 z-30 flex flex-col gap-2 max-sm:hidden">
         <button onClick={() => mapRef.current?.setZoom(Math.min(20, (mapRef.current?.getZoom() ?? 12) + 1))} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="放大"><Plus size={18} /></button>
         <button onClick={() => mapRef.current?.setZoom(Math.max(3, (mapRef.current?.getZoom() ?? 12) - 1))} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="缩小"><Minus size={18} /></button>
         <button onClick={() => mapRef.current?.setZoomAndCenter(places.length > 1 ? 11 : 13, mapCenter(places))} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="显示全部地点"><LocateFixed size={18} /></button>
@@ -624,7 +624,7 @@ export default function MapContainer({
         <span>{message}</span>
         {photoMode && <button type="button" data-testid="photo-draft-cancel" onClick={() => { endPhotoMode(); setMessage(''); }} className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 font-bold text-slate-500 hover:bg-slate-50">不关联照片</button>}
       </div>}
-      {!draft && !message && <div className="absolute bottom-4 left-3 z-30 rounded-xl border border-slate-100 bg-white/90 p-2 text-[10px] font-semibold text-slate-500 shadow-md">双击地图手动选点 · 点击标记查看 · 右键标记管理</div>}
+      {!draft && !message && <div className="absolute bottom-4 left-3 right-3 z-30 rounded-xl border border-slate-100 bg-white/90 px-3 py-2 text-[10px] font-semibold text-slate-500 shadow-md truncate">双击选点 · 点击标记查看详情 · 长按管理</div>}
     </div>
   );
 }

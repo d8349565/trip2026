@@ -398,7 +398,7 @@ export default function MobileTripOverviewPage({
           ) : (
             <div className="text-center py-12">
               <Calendar className="text-slate-300 mx-auto" size={40} />
-              <p className="text-xs text-slate-400 mt-2">没有检测到激活行程，请在右侧“规划总览”中创建。</p>
+              <p className="text-xs text-slate-400 mt-2">没有激活行程，点底部“+”创建一条。</p>
             </div>
           )}
         </div>

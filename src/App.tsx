@@ -689,18 +689,18 @@ export default function App() {
               </div>
               <div>
                 <h1 className="font-extrabold text-[15px] tracking-tight text-slate-900 leading-tight">
-                  {viewMode === 'trip' && '自驾旅行日程'}
-                  {viewMode === 'photos' && '旅行足迹影集'}
-                  {viewMode === 'checklist' && '装备物资清单'}
-                  {viewMode === 'guide' && '自驾游玩攻略'}
-                  {viewMode === 'settings' && '我的自驾服务器'}
+                  {viewMode === 'trip' && '旅行日程'}
+                  {viewMode === 'photos' && '照片'}
+                  {viewMode === 'checklist' && '清单'}
+                  {viewMode === 'guide' && '攻略'}
+                  {viewMode === 'settings' && '我的'}
                 </h1>
                 <p className="text-[11px] text-slate-400 mt-0.5 font-semibold leading-none">
-                  {viewMode === 'trip' && (activeTrip ? `当前路线：${activeTrip.title}` : '开始您的旅程计划')}
-                  {viewMode === 'photos' && `共记录了 ${media.length} 张精彩瞬间`}
-                  {viewMode === 'checklist' && '防遗漏、防风险专业物资打卡'}
-                  {viewMode === 'guide' && '潮州自驾及防山洪专业指南'}
-                  {viewMode === 'settings' && '数据已保存至私人服务器'}
+                  {viewMode === 'trip' && (activeTrip ? activeTrip.title : '点击下方 + 创建行程')}
+                  {viewMode === 'photos' && `${media.length} 张`}
+                  {viewMode === 'checklist' && `${checklists.length} 个清单`}
+                  {viewMode === 'guide' && `${guides.length} 篇`}
+                  {viewMode === 'settings' && '本地存储'}
                 </p>
               </div>
             </div>
@@ -758,7 +758,7 @@ export default function App() {
                     mobileTripTab === 'today' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
                   }`}
                 >
-                  今日行程 🚀
+                  今日行程
                 </button>
                 <button
                   id="m_trip_tab_manage"
@@ -767,7 +767,7 @@ export default function App() {
                     mobileTripTab === 'manage' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
                   }`}
                 >
-                  日程规划 ⚙️
+                  行程规划
                 </button>
               </div>
 

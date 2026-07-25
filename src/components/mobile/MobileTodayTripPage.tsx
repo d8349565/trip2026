@@ -1,7 +1,7 @@
 import React from 'react';
 import { Trip, TripDay, TripItem, Place } from '../../types';
 import { 
-  CheckCircle, Circle, MapPin, Clock, Navigation, 
+  Calendar, CheckCircle, Circle, MapPin, Clock, Navigation, 
   Check, ArrowRight, ShieldAlert, Sparkles, ChevronDown, HelpCircle 
 } from 'lucide-react';
 
@@ -30,16 +30,16 @@ export default function MobileTodayTripPage({
 }: MobileTodayTripPageProps) {
   if (!activeTrip) {
     return (
-      <div className="text-center py-12 px-5 bg-white rounded-2xl border border-slate-100 shadow-sm font-sans">
-        <span className="text-3xl">🗓️</span>
-        <p className="text-[15px] font-extrabold text-slate-800 mt-2">暂无安排行程</p>
-        <p className="text-[12px] text-slate-400 mt-1">您可以通过中间的 “＋” 按钮快速选择地点或创建一条新的行程路线规划。</p>
+      <div className="flex-1 flex flex-col items-center justify-center py-16 px-5 bg-white rounded-2xl border border-slate-100 shadow-sm font-sans">
+        <Calendar size={40} className="text-slate-300" />
+        <p className="text-[15px] font-extrabold text-slate-800 mt-3">暂无行程</p>
+        <p className="text-[12px] text-slate-400 mt-1 text-center">点底部「+」→ 创建行程，开始规划路线</p>
         <button
           type="button"
           onClick={onOpenTripSelector}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold"
+          className="mt-4 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold active:scale-95 transition-all"
         >
-          查看/切换路线
+          创建行程
         </button>
       </div>
     );
@@ -47,16 +47,16 @@ export default function MobileTodayTripPage({
 
   if (!activeDay) {
     return (
-      <div className="text-center py-12 px-5 bg-white rounded-2xl border border-slate-100 shadow-sm font-sans">
-        <span className="text-3xl">🚗</span>
-        <p className="text-[15px] font-extrabold text-slate-800 mt-2">未添加具体日程天数</p>
-        <p className="text-[12px] text-slate-400 mt-1">请为行程「{activeTrip.title}」添加具体的天数（Day）来编排每日路线。</p>
+      <div className="flex-1 flex flex-col items-center justify-center py-16 px-5 bg-white rounded-2xl border border-slate-100 shadow-sm font-sans">
+        <MapPin size={40} className="text-slate-300" />
+        <p className="text-[15px] font-extrabold text-slate-800 mt-3">未添加日程</p>
+        <p className="text-[12px] text-slate-400 mt-1 text-center">为行程「{activeTrip.title}」添加 Day 编排路线</p>
         <button
           type="button"
           onClick={onOpenTripSelector}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold"
+          className="mt-4 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold active:scale-95 transition-all"
         >
-          切换其他路线
+          管理日程
         </button>
       </div>
     );

@@ -79,10 +79,10 @@ export default function MobileMapPage({
   // Hot Categories for the streamlined category bar
   // "全部", "溯溪", "景点", "美食", "更多"
   const hotCategories = [
-    { key: '', label: '全部', icon: '🚀' },
-    { key: 'stream', label: '溯溪', icon: '🌊' },
-    { key: 'scenic', label: '景点', icon: '⛰️' },
-    { key: 'food', label: '美食', icon: '🍲' },
+    { key: '', label: '全部', icon: <SlidersHorizontal size={13} /> },
+    { key: 'stream', label: '溯溪', icon: <Navigation size={13} className="rotate-90" /> },
+    { key: 'scenic', label: '景点', icon: <MapPin size={13} /> },
+    { key: 'food', label: '美食', icon: <Search size={13} /> },
   ];
 
   const handleResetMapPosition = () => {
@@ -115,7 +115,7 @@ export default function MobileMapPage({
                   : 'bg-white/95 backdrop-blur-md border-slate-100 text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <span>{cat.icon}</span>
+              <span className="flex items-center">{cat.icon}</span>
               <span>{cat.label}</span>
             </button>
           );
@@ -127,8 +127,8 @@ export default function MobileMapPage({
           onClick={() => setShowFilterSheet(true)}
           className={`px-3.5 py-2.5 rounded-xl text-xs font-black whitespace-nowrap border transition-all flex items-center gap-1 shadow-sm bg-white/95 backdrop-blur-md border-slate-100 text-slate-600 outline-none shrink-0`}
         >
-          <span>✨</span>
-          <span>更多分类 / 筛选</span>
+          <Sparkles size={13} />
+          <span>筛选</span>
         </button>
       </div>
 

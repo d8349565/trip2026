@@ -84,7 +84,7 @@ export default function MobileCreateSheet({ isOpen, onClose, onAction }: MobileC
         </div>
 
         {/* Action Grid/List */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-3 pb-8">
+        <div className="flex-1 overflow-y-auto p-5 space-y-3 pb-[max(2rem,env(safe-area-inset-bottom))]">
           {actions.map((act) => (
             <button
               key={act.type}

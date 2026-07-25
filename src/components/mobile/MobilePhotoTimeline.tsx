@@ -257,8 +257,8 @@ export default function MobilePhotoTimeline({
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
               />
-              <div className="absolute bottom-2 inset-x-2 bg-slate-900/40 backdrop-blur-md px-2 py-1 rounded-lg flex justify-between items-center text-[10px] text-white">
-                <span className="truncate flex-1 max-w-[60px]">
+              <div className="absolute bottom-2 inset-x-2 bg-slate-900/50 backdrop-blur-md px-2 py-1.5 rounded-lg flex items-center gap-1.5 text-[10px] text-white">
+                <span className="truncate flex-1 min-w-0 text-left font-medium">
                   {places.find(p => p.id === photo.place_id)?.name || '随拍'}
                 </span>
                 {photo.favorite && (

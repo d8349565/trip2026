@@ -56,9 +56,9 @@ export default function MobileProfilePage({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 flex flex-col h-full scrollbar-none pb-12 font-sans select-none">
+    <div className="flex-1 overflow-y-auto bg-slate-50 flex flex-col h-full scrollbar-none pb-20 font-sans select-none">
       {/* 1. Header with Avatar */}
-      <div className="bg-gradient-to-b from-blue-600 to-blue-700 text-white px-5 pt-8 pb-10 rounded-b-[2rem] shadow-md relative shrink-0">
+      <div className="bg-gradient-to-b from-blue-600 to-blue-700 text-white px-5 pt-8 pb-14 rounded-b-[2rem] shadow-md relative shrink-0">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md border-2 border-white/40 flex items-center justify-center font-extrabold text-2xl uppercase shadow-lg select-none">
             {currentUser ? currentUser.username[0] : <UserIcon size={28} />}
@@ -93,7 +93,7 @@ export default function MobileProfilePage({
       </div>
 
       {/* 2. Grid Statistics */}
-      <div className="px-5 -mt-6 select-none shrink-0">
+      <div className="px-5 -mt-4 select-none shrink-0">
         <div className="bg-white rounded-2xl p-4.5 shadow-sm border border-slate-100 grid grid-cols-3 gap-2 text-center">
           <button 
             onClick={() => onNavigateToView('map')}
