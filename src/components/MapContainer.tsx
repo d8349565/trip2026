@@ -227,11 +227,11 @@ export default function MapContainer({
         center: initialCenterRef.current,
         zoom: places.length > 1 ? 11 : 13,
         viewMode: '2D',
-        doubleClickZoom: true,
+        doubleClickZoom: isTouchDevice,
         resizeEnable: true,
       });
-      // PC 端保留双击创建标记；移动端用长按代替
-      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      // 移动端：双击放大走原生（doubleClickZoom=true），长按创建标记
+      // PC 端：双击缩放被禁用，双击改为创建标记
       if (!isTouchDevice) {
         map.on('dblclick', (event) => {
           if (!event.lnglat) return;
@@ -244,6 +244,13 @@ export default function MapContainer({
       }
       mapRef.current = map;
       setReady(true);
+      // 双击/双指缩放会触发 zoomstart；AMap 可能吞掉 touchend 导致长按定时器残留，
+      // 一旦地图开始缩放/移动就清除待定的长按，避免双击误创建标记
+      const clearLongPress = () => {
+        if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = undefined; }
+      };
+      map.on('zoomstart', clearLongPress);
+      map.on('movestart', clearLongPress);
       // 移动端长按创建标记（600ms，移动超 10px 取消）
       if (isTouchDevice && containerRef.current) {
         const el = containerRef.current;
