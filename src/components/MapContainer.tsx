@@ -326,8 +326,10 @@ export default function MapContainer({
         ? `<img src="${cover}" alt="${safeName}" class="h-full w-full rounded-full object-cover" />`
         : (CATEGORY_EMOJI[place.category_id] ?? '📍');
       content.innerHTML = `
-        <span class="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-white text-lg shadow-lg transition-transform ${selected ? 'scale-125 ring-4 ring-blue-400/40' : 'bg-white hover:scale-110'}">
-          ${iconInner}
+        <span class="relative inline-flex transition-transform ${selected ? 'scale-125' : 'hover:scale-110'}">
+          <span class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-white text-lg shadow-lg ${selected ? 'ring-4 ring-blue-400/40' : 'bg-white'}">
+            ${iconInner}
+          </span>
           ${visitedBadge}
         </span>
         <span class="mt-1 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-bold shadow-sm ${selected ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-100 bg-white text-slate-800'}">${safeName}</span>`;
