@@ -149,7 +149,13 @@ export default function MapContainer({
   const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number; address?: string; name?: string } | null>(null);
   const myLocMarkerRef = useRef<unknown | undefined>(undefined);
   const initialCenterRef = useRef(mapCenter(places));
-  const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  // 手势模式按“主指针”判定：触屏笔记本的主指针仍是鼠标(fine)，应走 PC 双击建点；
+  // 只看 ontouchstart/maxTouchPoints 会把触屏 PC 误判成移动端，导致双击无法新增。
+  const isTouchDevice = typeof window !== 'undefined' && (
+    typeof window.matchMedia === 'function'
+      ? window.matchMedia('(pointer: coarse)').matches
+      : ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+  );
   const dismissHint = () => {}; // no-op: 不再显示底部提示
   // 手机端编辑表单：可收起/展开
   const [draftExpanded, setDraftExpanded] = useState(false);

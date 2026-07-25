@@ -41,23 +41,23 @@ import MobileVisitListPage from './components/mobile/MobileVisitListPage';
 import { 
   Map, Calendar, Image as ImageIcon, CheckSquare, BookOpen, Settings, Heart, 
   Search, Star, MapPin, Plus, SlidersHorizontal, LogIn, Key, Compass, X, 
-  Menu, Info, Eye, LogOut, Check, ArrowUpDown
+  Menu, Info, Eye, LogOut, Check, ArrowUpDown, ChevronDown, List, Pencil, Waves
 } from 'lucide-react';
 
 // Category color mappings
-const CATEGORY_COLORS: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }> = {
-  stream: { bg: 'bg-[#e0f2fe]', text: 'text-[#0284c7]', iconBg: 'bg-[#0284c7]', border: 'border-[#bae6fd]' },
-  scenic: { bg: 'bg-[#f0fdf4]', text: 'text-[#16a34a]', iconBg: 'bg-[#16a34a]', border: 'border-[#bbf7d0]' },
-  play: { bg: 'bg-[#fdf2f8]', text: 'text-[#db2777]', iconBg: 'bg-[#db2777]', border: 'border-[#fbcfe8]' },
-  food: { bg: 'bg-[#fff7ed]', text: 'text-[#ea580c]', iconBg: 'bg-[#ea580c]', border: 'border-[#ffedd5]' },
-  accommodation: { bg: 'bg-[#f0f9ff]', text: 'text-[#0284c7]', iconBg: 'bg-[#0284c7]', border: 'border-[#e0f2fe]' },
-  camp: { bg: 'bg-[#f0fdf4]', text: 'text-[#15803d]', iconBg: 'bg-[#15803d]', border: 'border-[#bbf7d0]' },
-  parking: { bg: 'bg-[#f1f5f9]', text: 'text-[#475569]', iconBg: 'bg-[#475569]', border: 'border-[#e2e8f0]' },
-  hiking: { bg: 'bg-[#fffbeb]', text: 'text-[#d97706]', iconBg: 'bg-[#d97706]', border: 'border-[#fef3c7]' },
-  viewpoint: { bg: 'bg-[#faf5ff]', text: 'text-[#7c3aed]', iconBg: 'bg-[#7c3aed]', border: 'border-[#f3e8ff]' },
-  family: { bg: 'bg-[#ecfdf5]', text: 'text-[#059669]', iconBg: 'bg-[#059669]', border: 'border-[#d1fae5]' },
-  charging: { bg: 'bg-[#f0fdfa]', text: 'text-[#0d9488]', iconBg: 'bg-[#0d9488]', border: 'border-[#ccfbf1]' },
-  medical: { bg: 'bg-[#fef2f2]', text: 'text-[#dc2626]', iconBg: 'bg-[#dc2626]', border: 'border-[#fee2e2]' },
+const CATEGORY_COLORS: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string; ring: string }> = {
+  stream: { bg: 'bg-[#e0f2fe]', text: 'text-[#0284c7]', iconBg: 'bg-[#0284c7]', border: 'border-[#bae6fd]', ring: 'ring-[#bae6fd]' },
+  scenic: { bg: 'bg-[#f0fdf4]', text: 'text-[#16a34a]', iconBg: 'bg-[#16a34a]', border: 'border-[#bbf7d0]', ring: 'ring-[#bbf7d0]' },
+  play: { bg: 'bg-[#fdf2f8]', text: 'text-[#db2777]', iconBg: 'bg-[#db2777]', border: 'border-[#fbcfe8]', ring: 'ring-[#fbcfe8]' },
+  food: { bg: 'bg-[#fff7ed]', text: 'text-[#ea580c]', iconBg: 'bg-[#ea580c]', border: 'border-[#ffedd5]', ring: 'ring-[#ffedd5]' },
+  accommodation: { bg: 'bg-[#f0f9ff]', text: 'text-[#0284c7]', iconBg: 'bg-[#0284c7]', border: 'border-[#e0f2fe]', ring: 'ring-[#e0f2fe]' },
+  camp: { bg: 'bg-[#f0fdf4]', text: 'text-[#15803d]', iconBg: 'bg-[#15803d]', border: 'border-[#bbf7d0]', ring: 'ring-[#bbf7d0]' },
+  parking: { bg: 'bg-[#f1f5f9]', text: 'text-[#475569]', iconBg: 'bg-[#475569]', border: 'border-[#e2e8f0]', ring: 'ring-[#e2e8f0]' },
+  hiking: { bg: 'bg-[#fffbeb]', text: 'text-[#d97706]', iconBg: 'bg-[#d97706]', border: 'border-[#fef3c7]', ring: 'ring-[#fef3c7]' },
+  viewpoint: { bg: 'bg-[#faf5ff]', text: 'text-[#7c3aed]', iconBg: 'bg-[#7c3aed]', border: 'border-[#f3e8ff]', ring: 'ring-[#f3e8ff]' },
+  family: { bg: 'bg-[#ecfdf5]', text: 'text-[#059669]', iconBg: 'bg-[#059669]', border: 'border-[#d1fae5]', ring: 'ring-[#d1fae5]' },
+  charging: { bg: 'bg-[#f0fdfa]', text: 'text-[#0d9488]', iconBg: 'bg-[#0d9488]', border: 'border-[#ccfbf1]', ring: 'ring-[#ccfbf1]' },
+  medical: { bg: 'bg-[#fef2f2]', text: 'text-[#dc2626]', iconBg: 'bg-[#dc2626]', border: 'border-[#fee2e2]', ring: 'ring-[#fee2e2]' },
 };
 
 const CATEGORY_LABELS: Record<PlaceCategory, string> = {
@@ -1316,103 +1316,69 @@ export default function App() {
 
         {/* TOP FILTER & HEADER STRIP (DESKTOP) */}
         {!isMobile && viewMode === 'map' && (
-          <header className="bg-white border-b border-slate-100 p-4 shrink-0 flex flex-wrap items-center justify-between gap-4 z-10 shadow-sm">
-            {/* Left aligned Filters */}
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* Search input bar */}
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-3 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="搜索地点、城市、关键词..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 w-60"
-                />
-              </div>
+          <header className="bg-white/90 backdrop-blur border-b border-slate-200/70 px-4 py-2.5 shrink-0 flex items-center gap-2 z-10">
+            {/* 搜索 */}
+            <div className="relative flex-1 max-w-sm min-w-44">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="搜索地点、城市、关键词..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-9 pl-9 pr-3 bg-slate-100/80 border border-transparent rounded-lg text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 transition-colors"
+              />
+            </div>
 
-              {/* Tag filters dropdowns matching Mockup 2 */}
+            <div className="w-px h-5 bg-slate-200 shrink-0" />
+
+            {/* 难度筛选 */}
+            <div className="relative shrink-0">
               <select
                 value={difficultyFilter}
                 onChange={(e) => setDifficultyFilter(e.target.value)}
-                className="text-xs p-2 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-600 font-bold"
+                className="appearance-none h-9 pl-3 pr-8 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 outline-none cursor-pointer hover:border-slate-300 focus:border-blue-500 transition-colors"
               >
-                <option value="">🗺️ 难度不限</option>
+                <option value="">难度不限</option>
                 <option value="easy">轻松徒步</option>
                 <option value="moderate">中等溯溪</option>
                 <option value="hard">硬核穿越</option>
               </select>
-
-              <button
-                onClick={() => setIsWetFilter(prev => !prev)}
-                className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
-                  isWetFilter 
-                    ? 'bg-cyan-50 border-cyan-200 text-cyan-600' 
-                    : 'bg-slate-50 border-slate-200 text-slate-600'
-                }`}
-              >
-                🌊 避暑涉水
-              </button>
-
-              <button
-                onClick={() => setShowFavoritesOnly(prev => !prev)}
-                className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
-                  showFavoritesOnly 
-                    ? 'bg-amber-50 border-amber-200 text-amber-600' 
-                    : 'bg-slate-50 border-slate-200 text-slate-600'
-                }`}
-              >
-                ★ 精选收藏
-              </button>
-
-              <div className="relative">
-                <button
-                  onClick={() => setShowPlaceManager((prev) => !prev)}
-                  className="px-3 py-2 rounded-xl text-xs font-bold border border-blue-600 bg-blue-600 text-white shadow-sm whitespace-nowrap"
-                >
-                  ＋ 录入 / 管理地点
-                </button>
-                {showPlaceManager && (
-                  <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-2xl border border-slate-100 bg-white p-2 shadow-2xl">
-                    <div className="flex items-center justify-between px-2 pb-2 pt-1">
-                      <span className="text-xs font-black text-slate-700">管理地点 ({places.length})</span>
-                      <button
-                        onClick={() => { setShowPlaceManager(false); requestMapEditor(); }}
-                        className="rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-600 hover:bg-blue-100"
-                      >
-                        ＋ 新增地点
-                      </button>
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {places.length === 0 ? (
-                        <p className="px-2 py-6 text-center text-xs text-slate-400">还没有地点，点「新增地点」在地图上标记。</p>
-                      ) : (
-                        places.map((place) => (
-                          <div key={place.id} className="group flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-slate-50">
-                            <button
-                              onClick={() => { setShowPlaceManager(false); setSelectedPlace(place); setViewMode('map'); }}
-                              className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                            >
-                              <span className="text-base">{CATEGORY_ICONS[place.category_id] ?? '📍'}</span>
-                              <span className="min-w-0">
-                                <span className="block truncate text-xs font-bold text-slate-800">{place.name}</span>
-                                <span className="block truncate text-[10px] text-slate-400">{CATEGORY_LABELS[place.category_id] ?? '地点'}</span>
-                              </span>
-                            </button>
-                            <button
-                              onClick={() => { setShowPlaceManager(false); requestPlaceEdit(place); }}
-                              className="rounded-lg px-2 py-1 text-[11px] font-bold text-slate-500 hover:bg-slate-100 hover:text-blue-600"
-                            >
-                              编辑
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
+
+            {/* 快捷开关 */}
+            <button
+              onClick={() => setIsWetFilter(prev => !prev)}
+              title="避暑涉水"
+              className={`h-9 w-9 shrink-0 rounded-lg border flex items-center justify-center transition-all ${
+                isWetFilter
+                  ? 'bg-cyan-50 border-cyan-300 text-cyan-600 shadow-sm'
+                  : 'bg-white border-slate-200 text-slate-400 hover:text-cyan-600 hover:border-cyan-200'
+              }`}
+            >
+              <Waves size={15} />
+            </button>
+            <button
+              onClick={() => setShowFavoritesOnly(prev => !prev)}
+              title="精选收藏"
+              className={`h-9 w-9 shrink-0 rounded-lg border flex items-center justify-center transition-all ${
+                showFavoritesOnly
+                  ? 'bg-amber-50 border-amber-300 text-amber-500 shadow-sm'
+                  : 'bg-white border-slate-200 text-slate-400 hover:text-amber-500 hover:border-amber-200'
+              }`}
+            >
+              <Star size={15} fill={showFavoritesOnly ? 'currentColor' : 'none'} />
+            </button>
+
+            {/* 主操作：打开地点管理抽屉 */}
+            <button
+              onClick={() => setShowPlaceManager(true)}
+              className="h-9 px-3.5 ml-auto shrink-0 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-blue-600/20 transition-all"
+            >
+              <List size={14} />
+              <span>录入 / 管理地点</span>
+              <span className="px-1.5 py-0.5 rounded-md bg-white/20 text-[10px] font-extrabold leading-none">{places.length}</span>
+            </button>
 
             {/* Right side user indicator */}
             {currentUser && (
@@ -1428,38 +1394,117 @@ export default function App() {
 
         {/* CATEGORY BAR (FOR MAP VIEW) */}
         {viewMode === 'map' && (
-          <div className="px-4 py-3 bg-[#f8fafc] border-b border-slate-100 flex items-center gap-2 overflow-x-auto shrink-0 scrollbar-none z-10">
-            {/* "全部" pill */}
-            <button
-              onClick={() => setSelectedCategory('')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${
-                !selectedCategory
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/10'
-                  : 'bg-white text-slate-600 border-slate-150 hover:bg-slate-50'
-              }`}
-            >
-              🚀 全部
-            </button>
+          <div className="relative shrink-0 bg-white border-b border-slate-200/70 z-10">
+            <div className="px-4 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+              <button
+                onClick={() => setSelectedCategory('')}
+                className={`h-7 px-3 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
+                  !selectedCategory
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                全部
+              </button>
 
-            {/* Dynamic list pills mapping category styles matching screen 1 and 2 */}
-            {(Object.keys(CATEGORY_LABELS) as PlaceCategory[]).map(cat => {
-              const isActive = selectedCategory === cat;
-              const colorConfig = CATEGORY_COLORS[cat];
-              return (
+              {/* 分类筛选：未选中保持安静，选中用分类自己的颜色 */}
+              {(Object.keys(CATEGORY_LABELS) as PlaceCategory[]).map(cat => {
+                const isActive = selectedCategory === cat;
+                const colorConfig = CATEGORY_COLORS[cat];
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(isActive ? '' : cat)}
+                    className={`h-7 pl-2 pr-2.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
+                      isActive
+                        ? `${colorConfig.bg} ${colorConfig.text} ring-1 ring-inset ${colorConfig.ring} shadow-sm`
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${colorConfig.iconBg} ${isActive ? '' : 'opacity-50'}`} />
+                    <span>{CATEGORY_LABELS[cat]}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-white to-transparent" />
+          </div>
+        )}
+
+        {/* 地点管理抽屉（桌面端）：替代原先被裁剪的下拉小面板 */}
+        {!isMobile && showPlaceManager && (
+          <div className="absolute inset-0 z-40">
+            <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-[1px] animate-fade-in" onClick={() => setShowPlaceManager(false)} />
+            <aside className="absolute right-0 top-0 bottom-0 w-[340px] bg-white border-l border-slate-200 shadow-2xl flex flex-col animate-slide-in-right">
+              <div className="px-4 pt-4 pb-3 border-b border-slate-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-extrabold text-slate-800">地点管理</h2>
+                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-[10px] font-extrabold text-slate-500">{places.length}</span>
+                  </div>
+                  <button
+                    onClick={() => setShowPlaceManager(false)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                    title="关闭"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
                 <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-1 shrink-0 ${
-                    isActive
-                      ? `${colorConfig.bg} ${colorConfig.text} ${colorConfig.border} ring-1 ring-blue-500/10 shadow-sm font-extrabold`
-                      : 'bg-white text-slate-600 border-slate-150 hover:bg-slate-50'
-                  }`}
+                  onClick={() => { setShowPlaceManager(false); requestMapEditor(); }}
+                  className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm shadow-blue-600/20 transition-colors"
                 >
-                  <span className="text-sm shrink-0">{CATEGORY_ICONS[cat]}</span>
-                  <span>{CATEGORY_LABELS[cat]}</span>
+                  <Plus size={14} />
+                  <span>新增地点</span>
                 </button>
-              );
-            })}
+                <div className="relative">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="筛选地点..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full h-8 pl-8 pr-3 bg-slate-100/80 border border-transparent rounded-lg text-xs focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 transition-colors"
+                  />
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2">
+                {filteredPlaces.length === 0 ? (
+                  <p className="px-2 py-10 text-center text-xs text-slate-400">
+                    {places.length === 0 ? '还没有地点，点上方「新增地点」在地图上标记。' : '没有匹配的地点。'}
+                  </p>
+                ) : (
+                  filteredPlaces.map((place) => {
+                    const colorConfig = CATEGORY_COLORS[place.category_id];
+                    return (
+                      <div key={place.id} className="group flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-slate-50 transition-colors">
+                        <button
+                          onClick={() => { setShowPlaceManager(false); setSelectedPlace(place); setViewMode('map'); }}
+                          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                        >
+                          <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0 ${colorConfig?.bg ?? 'bg-slate-100'}`}>
+                            {CATEGORY_ICONS[place.category_id] ?? '📍'}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-bold text-slate-800">{place.name}</span>
+                            <span className="block truncate text-[10px] text-slate-400 mt-0.5">
+                              {CATEGORY_LABELS[place.category_id] ?? '地点'}{place.address ? ` · ${place.address}` : ''}
+                            </span>
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => { setShowPlaceManager(false); requestPlaceEdit(place); }}
+                          className="p-1.5 rounded-lg text-slate-300 hover:text-blue-600 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                          title="编辑地点"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </aside>
           </div>
         )}
 
