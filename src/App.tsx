@@ -520,12 +520,12 @@ export default function App() {
   };
 
   // 照片带 GPS 时：直接自动建一个地点标记并关联照片，不再要求用户手动确认。
-  const handleAutoCreatePlaceFromPhoto = async (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => {
+  const handleAutoCreatePlaceFromPhoto = async (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string; category_id?: string }) => {
     if (!Number.isFinite(seed.latitude) || !Number.isFinite(seed.longitude)) return;
     try {
       const created = await api.createPlace({
         name: seed.name?.trim() || seed.address?.trim() || '照片拍摄点',
-        category_id: 'scenic',
+        category_id: (seed.category_id as any) || 'scenic',
         latitude: seed.latitude,
         longitude: seed.longitude,
         coordinate_system: 'GCJ02',
@@ -565,6 +565,17 @@ export default function App() {
       await reloadAllData();
     } catch (e) {
       alert('更新失败');
+    }
+  };
+
+  // 设置某张照片为地点封面
+  const handleSetCover = async (placeId: string, photoUrl: string) => {
+    try {
+      const updated = await api.updatePlace(placeId, { cover_image: photoUrl });
+      setPlaces((current) => current.map((item) => item.id === placeId ? updated : item));
+      if (selectedPlace?.id === placeId) setSelectedPlace(updated);
+    } catch (e) {
+      alert('设置封面失败');
     }
   };
 
@@ -1460,6 +1471,7 @@ export default function App() {
               <div className="flex-1 h-full relative">
                 <MapContainer 
                   places={filteredPlaces}
+                  media={media}
                   selectedPlace={selectedPlace}
                   onSelectPlace={(p) => setSelectedPlace(p)}
                   onCreatePlace={handleCreatePlace}
@@ -1497,6 +1509,7 @@ export default function App() {
                     onCreateGuide={handleCreateGuide}
                     onUploadPhoto={handleUploadMedia}
                     onEditPlace={requestPlaceEdit}
+                    onSetCover={handleSetCover}
                   />
                 </div>
               )}
@@ -1611,6 +1624,7 @@ export default function App() {
                 onCreateGuide={handleCreateGuide}
                 onUploadPhoto={handleUploadMedia}
                 onEditPlace={requestPlaceEdit}
+                onSetCover={handleSetCover}
               />
             </div>
           </div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Media, Place } from '../../types';
 import { api } from '../../api';
 import { preparePhotoForUpload } from '../../utils/photoUpload';
+import { CATEGORY_OPTIONS } from '../../utils/categories';
 import { Clock, Image as ImageIcon, Heart, Trash2, Calendar, Grid, BookOpen, Plus, Camera, MapPin, X } from 'lucide-react';
 
 interface MobilePhotoTimelineProps {
@@ -12,7 +13,7 @@ interface MobilePhotoTimelineProps {
   onToggleFavorite: (id: string, fav: boolean) => void;
   onSelectPhoto: (photo: Media) => void;
   onCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => void;
-  onAutoCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => void;
+  onAutoCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string; category_id?: string }) => void;
 }
 
 export default function MobilePhotoTimeline({
@@ -30,6 +31,8 @@ export default function MobilePhotoTimeline({
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [photoPrompt, setPhotoPrompt] = useState<{ mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string; recognized: boolean } | null>(null);
+  // 照片带 GPS 时，先让用户选地点类型再自动建点
+  const [pendingCategorySeed, setPendingCategorySeed] = useState<{ mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string } | null>(null);
 
   // Group photos for timeline: Date -> Place -> Photos List
   const groupedTimeline: Record<string, Record<string, Media[]>> = {};
@@ -86,7 +89,8 @@ export default function MobilePhotoTimeline({
           } catch {
             // 坐标仍可用，自动建点时名称会回退为「照片拍摄点」。
           }
-          onAutoCreatePlaceFromPhoto({ mediaId: created.id, latitude: created.display_latitude, longitude: created.display_longitude, name, address });
+          // 先弹出分类选择，用户确认后再自动建点
+          setPendingCategorySeed({ mediaId: created.id, latitude: created.display_latitude, longitude: created.display_longitude, name, address });
         } else {
           setPhotoPrompt({ mediaId: created.id, recognized: false });
         }
@@ -320,6 +324,37 @@ export default function MobilePhotoTimeline({
                   />
                 </label>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CATEGORY PICKER — 照片带 GPS 时先选地点类型再自动建点（底部弹层） */}
+      {pendingCategorySeed && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end animate-fade-in" onClick={() => {
+          onAutoCreatePlaceFromPhoto({ ...pendingCategorySeed, category_id: 'scenic' });
+          setPendingCategorySeed(null);
+        }}>
+          <div className="w-full bg-white rounded-t-3xl p-5 pb-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
+            <h4 className="font-extrabold text-slate-800 text-sm">📍 这是什么类型的地点？</h4>
+            <p className="mt-1.5 text-[11px] text-slate-500 leading-relaxed">
+              已识别拍摄位置：<span className="font-bold text-slate-700">{pendingCategorySeed.name || pendingCategorySeed.address || '地图位置'}</span>。选择分类后自动在地图建立标记。
+            </p>
+            <div className="mt-4 grid grid-cols-4 gap-2">
+              {CATEGORY_OPTIONS.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    onAutoCreatePlaceFromPhoto({ ...pendingCategorySeed, category_id: cat.id });
+                    setPendingCategorySeed(null);
+                  }}
+                  className="flex flex-col items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 py-2.5 transition-all active:scale-95 active:border-blue-400 active:bg-blue-50"
+                >
+                  <span className="text-xl">{cat.emoji}</span>
+                  <span className="text-[10px] font-bold text-slate-700">{cat.label}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>

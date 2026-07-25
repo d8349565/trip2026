@@ -31,6 +31,7 @@ interface PlaceDetailPaneProps {
   onCreateGuide?: (guide: Partial<Guide>) => Promise<void>; // added
   onUploadPhoto?: (photoData: { filename: string; file_size: number; dataUrl: string; place_id: string }) => Promise<unknown>; // added
   onEditPlace?: (place: Place) => void;
+  onSetCover?: (placeId: string, photoUrl: string) => void;
 }
 
 export default function PlaceDetailPane({
@@ -52,6 +53,7 @@ export default function PlaceDetailPane({
   onCreateGuide,
   onUploadPhoto,
   onEditPlace,
+  onSetCover,
 }: PlaceDetailPaneProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'guide' | 'photos' | 'visit'>('overview');
   const [showAddTripModal, setShowAddTripModal] = useState(false);
@@ -115,6 +117,8 @@ export default function PlaceDetailPane({
 
   // Find real uploaded or seeded photos linked to this place
   const relatedPhotos = media.filter(m => m.place_id === place.id);
+  // 有效封面：用户设置的 cover_image 优先，否则默认第一张关联照片
+  const effectiveCover = place.cover_image || relatedPhotos[0]?.file_path;
 
   // Find actual visits linked to this place
   const relatedVisits = visits.filter(v => v.place_id === place.id);
@@ -279,7 +283,7 @@ export default function PlaceDetailPane({
       {/* Cover Photo Banner */}
       <div className="relative w-full h-40 bg-slate-100 overflow-hidden shrink-0">
         <img 
-          src={place.cover_image || IMAGE_PLACEHOLDER} 
+          src={effectiveCover || IMAGE_PLACEHOLDER} 
           alt={place.name}
           className="w-full h-full object-cover"
         />
@@ -682,19 +686,33 @@ export default function PlaceDetailPane({
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2">
-                {relatedPhotos.map(photo => (
-                  <div key={photo.id} className="relative rounded-xl overflow-hidden aspect-4/3 bg-slate-100 border border-slate-200 shadow-2xs group">
-                    <img 
-                      src={photo.file_path} 
-                      alt="实地照"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      loading="lazy"
-                    />
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2 text-white flex flex-col justify-end text-[10px]">
-                      <p className="font-extrabold truncate">📸 {photo.captured_at?.split('T')[0]}</p>
+                {relatedPhotos.map(photo => {
+                  const isCover = (place.cover_image ?? relatedPhotos[0]?.file_path) === photo.file_path;
+                  return (
+                    <div key={photo.id} className="relative rounded-xl overflow-hidden aspect-4/3 bg-slate-100 border border-slate-200 shadow-2xs group">
+                      <img 
+                        src={photo.file_path} 
+                        alt="实地照"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        loading="lazy"
+                      />
+                      {isCover && (
+                        <span className="absolute top-1.5 left-1.5 rounded-md bg-blue-600 px-1.5 py-0.5 text-[9px] font-black text-white shadow-sm">封面</span>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2 text-white flex items-end justify-between gap-1 text-[10px]">
+                        <p className="font-extrabold truncate">📸 {photo.captured_at?.split('T')[0]}</p>
+                        {!isCover && onSetCover && (
+                          <button
+                            onClick={() => onSetCover(place.id, photo.file_path)}
+                            className="shrink-0 rounded-md bg-white/90 px-1.5 py-0.5 text-[9px] font-black text-blue-600 opacity-0 transition-opacity group-hover:opacity-100"
+                          >
+                            设为封面
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

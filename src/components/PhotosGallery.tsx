@@ -8,6 +8,7 @@ import { Media, Place, Trip } from '../types';
 import { api } from '../api';
 import { type PhotoExif } from '../utils/photoExif';
 import { preparePhotoForUpload } from '../utils/photoUpload';
+import { CATEGORY_OPTIONS } from '../utils/categories';
 import {
   Camera, Trash2, Heart, Calendar, MapPin, UploadCloud, X,
   Clock, Compass, Info, ZoomIn, Star, Filter, Image as ImageIcon
@@ -21,7 +22,7 @@ interface PhotosGalleryProps {
   onDeleteMedia: (id: string) => void;
   onToggleFavoriteMedia: (id: string, fav: boolean) => void;
   onCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => void;
-  onAutoCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => void;
+  onAutoCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string; category_id?: string }) => void;
   initialSelectedPlaceId?: string | null;
 }
 
@@ -52,6 +53,8 @@ export default function PhotosGallery({
   const [pendingExif, setPendingExif] = useState<PhotoExif>({});
   const [isUploading, setIsUploading] = useState(false);
   const [photoPrompt, setPhotoPrompt] = useState<{ mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string; recognized: boolean } | null>(null);
+  // 照片带 GPS 时，先让用户选地点类型再自动建点
+  const [pendingCategorySeed, setPendingCategorySeed] = useState<{ mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string } | null>(null);
 
   // Sync initial selected place ID if redirected from other views
   useEffect(() => {
@@ -192,7 +195,8 @@ export default function PhotosGallery({
           } catch {
             // 坐标仍可用，自动建点时名称会回退为「照片拍摄点」。
           }
-          onAutoCreatePlaceFromPhoto({
+          // 先弹出分类选择，用户确认后再自动建点
+          setPendingCategorySeed({
             mediaId: created.id,
             latitude: created.display_latitude,
             longitude: created.display_longitude,
@@ -574,6 +578,45 @@ export default function PhotosGallery({
           </div>
         );
       })()}
+
+      {/* CATEGORY PICKER — 照片带 GPS 时先选地点类型再自动建点 */}
+      {pendingCategorySeed && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <h4 className="font-extrabold text-slate-800 text-sm">📍 这是什么类型的地点？</h4>
+              <button
+                onClick={() => {
+                  onAutoCreatePlaceFromPhoto({ ...pendingCategorySeed, category_id: 'scenic' });
+                  setPendingCategorySeed(null);
+                }}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600"
+                title="跳过，默认按景点处理"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              已识别拍摄位置：<span className="font-bold text-slate-700">{pendingCategorySeed.name || pendingCategorySeed.address || '地图位置'}</span>。选择一个分类后会自动在地图上建立标记。
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {CATEGORY_OPTIONS.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    onAutoCreatePlaceFromPhoto({ ...pendingCategorySeed, category_id: cat.id });
+                    setPendingCategorySeed(null);
+                  }}
+                  className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2 py-3 text-slate-700 transition-all hover:border-blue-400 hover:bg-blue-50 hover:scale-[1.03] active:scale-95"
+                >
+                  <span className="text-xl">{cat.emoji}</span>
+                  <span className="text-[11px] font-bold">{cat.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* UPLOAD DIALOG POPOVER */}
       {showUploadModal && (

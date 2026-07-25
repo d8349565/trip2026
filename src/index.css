@@ -49,3 +49,22 @@
 .tf-location-card {
   animation: tf-rise 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* 通用弹层 / 底部抽屉动画 */
+@keyframes tf-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes tf-slide-up {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: tf-fade-in 0.2s ease-out both;
+}
+
+.animate-slide-up {
+  animation: tf-slide-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

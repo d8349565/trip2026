@@ -7,10 +7,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Check, Crosshair, Edit3, Link2, LocateFixed, MapPin, Minus, Plus, Search, Trash2, X } from 'lucide-react';
 import { api, type AmapPoi } from '../api';
 import { wgs84ToGcj02 } from '../utils/coords';
-import type { Place, PlaceCategory } from '../types';
+import type { Place, PlaceCategory, Media } from '../types';
 
 interface MapContainerProps {
   places: Place[];
+  media?: Media[];
   selectedPlace: Place | null;
   onSelectPlace: (place: Place) => void;
   onCreatePlace: (place: Partial<Place>) => Promise<Place>;
@@ -109,6 +110,7 @@ function inferCategory(poi: AmapPoi): PlaceCategory {
 
 export default function MapContainer({
   places,
+  media = [],
   selectedPlace,
   onSelectPlace,
   onCreatePlace,
@@ -253,16 +255,21 @@ export default function MapContainer({
 
     markersRef.current = places.map((place) => {
       const selected = selectedPlace?.id === place.id;
+      const cover = place.cover_image || media.find((m) => m.place_id === place.id)?.file_path;
       const content = document.createElement('button');
       content.type = 'button';
       content.dataset.placeMarker = place.id;
       content.className = 'group flex flex-col items-center outline-none';
       content.title = `${categoryLabels[place.category_id] ?? '地点'}：${place.name}（右键管理）`;
       const safeName = place.name.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
+      const visitedBadge = place.status === 'visited' ? '<i class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-emerald-500 text-[9px] not-italic text-white z-10">✓</i>' : '';
+      const iconInner = cover
+        ? `<img src="${cover}" alt="${safeName}" class="h-full w-full rounded-full object-cover" />`
+        : (CATEGORY_EMOJI[place.category_id] ?? '📍');
       content.innerHTML = `
-        <span class="relative flex h-10 w-10 items-center justify-center rounded-full border-2 border-white text-lg shadow-lg transition-transform ${selected ? 'scale-125 bg-blue-600 ring-4 ring-blue-400/30' : 'bg-white hover:scale-110'}">
-          ${CATEGORY_EMOJI[place.category_id] ?? '📍'}
-          ${place.status === 'visited' ? '<i class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-emerald-500 text-[9px] not-italic text-white">✓</i>' : ''}
+        <span class="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-white text-lg shadow-lg transition-transform ${selected ? 'scale-125 ring-4 ring-blue-400/40' : 'bg-white hover:scale-110'}">
+          ${iconInner}
+          ${visitedBadge}
         </span>
         <span class="mt-1 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-bold shadow-sm ${selected ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-100 bg-white text-slate-800'}">${safeName}</span>`;
       content.addEventListener('click', (event) => {
@@ -294,7 +301,7 @@ export default function MapContainer({
       if (markersRef.current.length && mapRef.current) mapRef.current.remove(markersRef.current);
       markersRef.current = [];
     };
-  }, [categoryLabels, onSelectPlace, places, ready, selectedPlace]);
+  }, [categoryLabels, media, onSelectPlace, places, ready, selectedPlace]);
 
   useEffect(() => {
     const map = mapRef.current;
