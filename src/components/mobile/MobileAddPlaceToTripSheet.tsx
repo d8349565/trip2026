@@ -111,7 +111,7 @@ export default function MobileAddPlaceToTripSheet({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5 pb-8 font-sans">
+        <div className="flex-1 overflow-y-auto p-5 pb-[max(2rem,env(safe-area-inset-bottom))] font-sans">
           {isSuccess ? (
             <div className="text-center py-8 space-y-5">
               <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto text-emerald-500">

@@ -44,7 +44,7 @@ export default function MobileDaySelectorSheet({
         </div>
 
         {/* List Content */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-2.5 pb-10">
+        <div className="flex-1 overflow-y-auto p-5 space-y-2.5 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
           {days.map((day) => {
             const isSelected = day.id === activeDayId;
             const itemsCount = getDayItemsCount(day.id);

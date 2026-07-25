@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+/* 移动端：输入框字号统一 16px，避免 iOS Safari 聚焦时自动缩放页面 */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* 移动端触控优化：去除点击高亮、抑制误触下拉刷新与橡皮筋滚动 */
+@media (max-width: 767px) {
+  html,
+  body {
+    overscroll-behavior-y: contain;
+  }
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 /* ---- 我的位置（可拖动的蓝色定位点，美团式脉冲光环） ---- */
 .tf-my-location {
   position: relative;
@@ -67,4 +87,13 @@
 
 .animate-slide-up {
   animation: tf-slide-up 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tf-slide-in-right {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-slide-in-right {
+  animation: tf-slide-in-right 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }

@@ -113,7 +113,7 @@ export default function MobileTripSelectorSheet({
         </div>
 
         {/* List Content */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5 pb-10">
+        <div className="flex-1 overflow-y-auto p-5 space-y-5 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
           {/* Ongoing Section */}
           {ongoingTrips.length > 0 && (
             <div className="space-y-2.5">

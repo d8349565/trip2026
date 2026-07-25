@@ -674,7 +674,7 @@ export default function App() {
     const todayItems = activeDay ? tripItems.filter(item => item.trip_day_id === activeDay.id).sort((a, b) => a.sort_order - b.sort_order) : [];
 
     return (
-      <div className="h-screen w-screen flex flex-col bg-slate-50/50 overflow-hidden text-slate-800 relative font-sans select-none pb-16">
+      <div className="h-screen w-screen flex flex-col bg-slate-50/50 overflow-hidden text-slate-800 relative font-sans select-none" style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))' }}>
         
         {/* 1. Page Header (Conditional depending on active tab) */}
         {viewMode !== 'map' && (
@@ -722,6 +722,7 @@ export default function App() {
             <div className="absolute inset-0 w-full h-full">
               <MobileMapPage
                 places={places}
+                media={media}
                 selectedPlace={selectedPlace}
                 onSelectPlace={setSelectedPlace}
                 onViewPlaceDetails={(p) => setMobileSelectedPlaceDetail(p)}

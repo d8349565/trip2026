@@ -69,6 +69,8 @@ export default function MobilePlaceDetailPage({
   // Filter trips & media
   const filteredDays = tripDays.filter(d => d.trip_id === selectedTripId);
   const placePhotos = media.filter(m => m.place_id === place.id);
+  // 有效封面：用户设置的 cover_image 优先，否则默认第一张关联照片（与 PC 端一致）
+  const effectiveCover = place.cover_image || placePhotos[0]?.file_path;
   const placeVisits = visits.filter(v => v.place_id === place.id);
 
   useEffect(() => {
@@ -146,9 +148,9 @@ export default function MobilePlaceDetailPage({
     <div className="fixed inset-0 bg-slate-50 z-50 flex flex-col h-full animate-fade-in select-none">
       {/* 1. Header with Cover */}
       <div className="relative h-56 bg-slate-900 shrink-0 select-none">
-        {place.cover_image ? (
+        {effectiveCover ? (
           <img 
-            src={place.cover_image} 
+            src={effectiveCover}
             alt={place.name} 
             className="w-full h-full object-cover opacity-80"
             referrerPolicy="no-referrer"
@@ -497,7 +499,7 @@ export default function MobilePlaceDetailPage({
       </div>
 
       {/* 4. Bottom Sticky Add Trip Button */}
-      <div className="absolute bottom-0 inset-x-0 bg-white border-t border-slate-100 p-4 flex gap-3 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.03)] select-none">
+      <div className="absolute bottom-0 inset-x-0 bg-white border-t border-slate-100 p-4 flex gap-3 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.03)] select-none" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
         <button
           id="m_details_add_trip_bottom"
           onClick={() => {

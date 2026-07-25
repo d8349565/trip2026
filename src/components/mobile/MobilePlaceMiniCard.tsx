@@ -4,6 +4,7 @@ import { Star, MapPin, Calendar, BookOpen, ChevronRight, X } from 'lucide-react'
 
 interface MobilePlaceMiniCardProps {
   place: Place;
+  coverUrl?: string;
   onClose: () => void;
   onViewDetails: () => void;
   onAddToTrip: () => void;
@@ -14,6 +15,7 @@ interface MobilePlaceMiniCardProps {
 
 export default function MobilePlaceMiniCard({
   place,
+  coverUrl,
   onClose,
   onViewDetails,
   onAddToTrip,
@@ -21,6 +23,8 @@ export default function MobilePlaceMiniCard({
   categoryLabels,
   categoryIcons,
 }: MobilePlaceMiniCardProps) {
+
+  const thumb = coverUrl ?? place.cover_image;
   const colorConfig = categoryColors[place.category_id] || { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' };
 
   return (
@@ -45,9 +49,9 @@ export default function MobilePlaceMiniCard({
 
       {/* Center content with Image and Meta */}
       <div className="mt-3 flex gap-3.5">
-        {place.cover_image ? (
+        {thumb ? (
           <img 
-            src={place.cover_image} 
+            src={thumb}
             alt={place.name} 
             className="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-100"
             referrerPolicy="no-referrer"

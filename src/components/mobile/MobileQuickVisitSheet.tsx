@@ -114,7 +114,7 @@ export default function MobileQuickVisitSheet({
         </div>
 
         {/* Scrollable Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4.5 pb-8 font-sans">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4.5 pb-[max(2rem,env(safe-area-inset-bottom))] font-sans">
           
           {/* 1. Place Selector */}
           <div className="space-y-1.5">

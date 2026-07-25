@@ -9,7 +9,10 @@ interface MobileBottomNavProps {
 
 export default function MobileBottomNav({ currentView, onViewChange, onOpenCreate }: MobileBottomNavProps) {
   return (
-    <nav className="bg-white border-t border-slate-100 shrink-0 h-16 flex justify-around items-center text-slate-400 font-bold z-20 shadow-[0_-4px_12px_rgba(0,0,0,0.03)] select-none">
+    <nav
+      className="bg-white border-t border-slate-100 shrink-0 flex justify-around items-center text-slate-400 font-bold z-20 shadow-[0_-4px_12px_rgba(0,0,0,0.03)] select-none"
+      style={{ paddingTop: 8, paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
+    >
       <button 
         id="m_nav_map"
         onClick={() => onViewChange('map')}

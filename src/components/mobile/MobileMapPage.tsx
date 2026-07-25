@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Place, PlaceCategory } from '../../types';
+import { Media, Place, PlaceCategory } from '../../types';
 import MapContainer from '../MapContainer';
 import MobilePlaceMiniCard from './MobilePlaceMiniCard';
 import { Search, SlidersHorizontal, MapPin, Navigation, List, Plus, X, Heart, ShieldAlert, Sparkles, Calendar } from 'lucide-react';
 
 interface MobileMapPageProps {
   places: Place[];
+  media: Media[];
   selectedPlace: Place | null;
   onSelectPlace: (place: Place | null) => void;
   onViewPlaceDetails: (place: Place) => void;
@@ -26,6 +27,7 @@ interface MobileMapPageProps {
 
 export default function MobileMapPage({
   places,
+  media,
   selectedPlace,
   onSelectPlace,
   onViewPlaceDetails,
@@ -101,6 +103,7 @@ export default function MobileMapPage({
       <div className="absolute inset-0 z-10 w-full h-full">
         <MapContainer
           places={filteredPlaces}
+          media={media}
           selectedPlace={selectedPlace}
           onSelectPlace={onSelectPlace}
           onCreatePlace={onCreatePlace}
@@ -180,6 +183,7 @@ export default function MobileMapPage({
       {selectedPlace && (
         <MobilePlaceMiniCard
           place={selectedPlace}
+          coverUrl={selectedPlace.cover_image || media.find(m => m.place_id === selectedPlace.id)?.file_path}
           onClose={() => onSelectPlace(null)}
           onViewDetails={() => onViewPlaceDetails(selectedPlace)}
           onAddToTrip={() => onAddToTrip(selectedPlace.id)}
