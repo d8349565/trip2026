@@ -149,14 +149,27 @@ export default function MapContainer({
   const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number; address?: string; name?: string } | null>(null);
   const myLocMarkerRef = useRef<unknown | undefined>(undefined);
   const initialCenterRef = useRef(mapCenter(places));
-  // 底部提示条：5秒自动消失 + 首次触碰地图后立即消失
-  const [showHint, setShowHint] = useState(true);
+  // 底部提示条：仅触屏设备显示，5秒自动消失 + 首次触碰地图后立即消失
+  const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  const [showHint, setShowHint] = useState(isTouchDevice);
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (!isTouchDevice) return;
     hintTimerRef.current = setTimeout(() => setShowHint(false), 5000);
-    return () => clearTimeout(hintTimerRef.current);
+    return () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current); };
   }, []);
   const dismissHint = () => { setShowHint(false); if (hintTimerRef.current) clearTimeout(hintTimerRef.current); };
+  // 定位卡片：8秒自动消失 + 可手动关闭
+  const [showLocCard, setShowLocCard] = useState(true);
+  const locCardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!myLocation) return;
+    setShowLocCard(true);
+    locCardTimerRef.current = setTimeout(() => setShowLocCard(false), 8000);
+    return () => { if (locCardTimerRef.current) clearTimeout(locCardTimerRef.current); };
+  }, [myLocation?.latitude, myLocation?.longitude]);
+  // 手机端编辑表单：可收起/展开
+  const [draftExpanded, setDraftExpanded] = useState(false);
   // 长按检测 ref
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -635,8 +648,18 @@ export default function MapContainer({
         <button onClick={() => void deletePlace(contextMenu.place)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-bold text-red-600 hover:bg-red-50"><Trash2 size={14} />删除地点</button>
       </div>}
 
-      {draft && <form data-testid="map-place-editor" onSubmit={savePlace} onClick={(event) => event.stopPropagation()} className="absolute bottom-12 left-3 z-40 max-h-[66vh] w-[min(390px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-100 bg-white/98 p-4 shadow-2xl backdrop-blur-md sm:bottom-4">
-        <div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-800">{editingId ? '编辑地点' : '确认地图标记'}</h3><p className="mt-0.5 text-[10px] text-blue-600">拖动地图上的蓝色标记可调整坐标</p></div><button type="button" onClick={() => { setDraft(null); setEditingId(null); setMessage(''); endPhotoMode(); }} className="rounded-full bg-slate-100 p-2 text-slate-500"><X size={15} /></button></div>
+      {draft && <form data-testid="map-place-editor" onSubmit={savePlace} onClick={(event) => event.stopPropagation()} className={`absolute left-3 right-3 z-40 overflow-hidden rounded-2xl border border-slate-100 bg-white/98 shadow-2xl backdrop-blur-md transition-all duration-300 ${draftExpanded ? 'bottom-3 max-h-[70vh] overflow-y-auto p-4' : 'bottom-3 p-3'}`}>
+        {/* 收起态：一行紧凑操作栏，地图全露 */}
+        {!draftExpanded ? (
+          <div className="flex items-center gap-2">
+            <input required value={draft.name ?? ''} onChange={(event) => updateDraft('name', event.target.value)} placeholder="地点名称" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs outline-none focus:border-blue-400" />
+            <button type="button" onClick={() => setDraftExpanded(true)} className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-200">展开</button>
+            <button disabled={busy} type="submit" className="shrink-0 flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"><Check size={13} />保存</button>
+            <button type="button" onClick={() => { setDraft(null); setEditingId(null); setMessage(''); endPhotoMode(); }} className="shrink-0 rounded-lg bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"><X size={14} /></button>
+          </div>
+        ) : (
+          <>
+        <div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-800">{editingId ? '编辑地点' : '确认地图标记'}</h3><p className="mt-0.5 text-[10px] text-blue-600">拖动地图上的蓝色标记可调整坐标</p></div><div className="flex items-center gap-1.5"><button type="button" onClick={() => setDraftExpanded(false)} className="rounded-full bg-slate-100 px-2.5 py-1.5 text-[10px] font-bold text-slate-500 hover:bg-slate-200">收起</button><button type="button" onClick={() => { setDraft(null); setEditingId(null); setDraftExpanded(false); setMessage(''); endPhotoMode(); }} className="rounded-full bg-slate-100 p-2 text-slate-500"><X size={15} /></button></div></div>
         <div className="grid grid-cols-2 gap-2">
           <label className="col-span-2"><span className="mb-1 block text-[10px] font-bold text-slate-400">地点名称</span><input required value={draft.name ?? ''} onChange={(event) => updateDraft('name', event.target.value)} className={inputClass} /></label>
           <label><span className="mb-1 block text-[10px] font-bold text-slate-400">分类</span><select value={draft.category_id} onChange={(event) => updateDraft('category_id', event.target.value)} className={inputClass}>{(Object.keys(categoryLabels) as PlaceCategory[]).map((category) => <option key={category} value={category}>{categoryLabels[category]}</option>)}</select></label>
@@ -656,19 +679,22 @@ export default function MapContainer({
         </div>
         {message && <p className="mt-2 text-[10px] font-semibold text-amber-600">{message}</p>}
         <button disabled={busy} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-3 text-xs font-bold text-white disabled:opacity-50"><Check size={15} />{editingId ? '保存修改' : '保存并生成标记'}</button>
+          </>
+        )}
       </form>}
 
-      {myLocation && !draft && (
+      {myLocation && !draft && showLocCard && (
         <div className="tf-location-card absolute bottom-4 left-1/2 z-30 flex w-[min(430px,calc(100%-24px))] -translate-x-1/2 items-center gap-2.5 rounded-2xl border border-blue-100 bg-white/95 py-2.5 pl-3.5 pr-2.5 shadow-xl backdrop-blur-md">
           <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
             <span className="absolute h-full w-full animate-ping rounded-full bg-blue-500/25" style={{ animationDuration: '1.8s' }} />
             <span className="h-2.5 w-2.5 rounded-full border-2 border-white bg-blue-600 shadow" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-black uppercase tracking-[0.14em] text-blue-500">当前位置 · 可拖动蓝点调整</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.14em] text-blue-500">当前位置</p>
             <p className="truncate text-[11px] font-bold text-slate-800">{myLocation.address ?? `${myLocation.latitude.toFixed(5)}, ${myLocation.longitude.toFixed(5)}`}</p>
           </div>
-          <button type="button" data-testid="create-at-my-location" onClick={createAtMyLocation} className="flex shrink-0 items-center gap-1 rounded-xl bg-blue-600 px-2.5 py-2 text-[10px] font-bold text-white shadow-sm shadow-blue-500/25 transition-transform hover:scale-105 active:scale-95"><MapPin size={11} />以此创建标记</button>
+          <button type="button" data-testid="create-at-my-location" onClick={createAtMyLocation} className="flex shrink-0 items-center gap-1 rounded-xl bg-blue-600 px-2.5 py-2 text-[10px] font-bold text-white shadow-sm shadow-blue-500/25 transition-transform hover:scale-105 active:scale-95"><MapPin size={11} />以此创建</button>
+          <button type="button" onClick={() => { setShowLocCard(false); if (locCardTimerRef.current) clearTimeout(locCardTimerRef.current); }} className="shrink-0 rounded-md p-1 text-slate-400 hover:text-slate-600"><X size={12} /></button>
         </div>
       )}
 
