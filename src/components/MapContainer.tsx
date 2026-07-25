@@ -149,25 +149,8 @@ export default function MapContainer({
   const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number; address?: string; name?: string } | null>(null);
   const myLocMarkerRef = useRef<unknown | undefined>(undefined);
   const initialCenterRef = useRef(mapCenter(places));
-  // 底部提示条：仅触屏设备显示，5秒自动消失 + 首次触碰地图后立即消失
   const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-  const [showHint, setShowHint] = useState(isTouchDevice);
-  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!isTouchDevice) return;
-    hintTimerRef.current = setTimeout(() => setShowHint(false), 5000);
-    return () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current); };
-  }, []);
-  const dismissHint = () => { setShowHint(false); if (hintTimerRef.current) clearTimeout(hintTimerRef.current); };
-  // 定位卡片：8秒自动消失 + 可手动关闭
-  const [showLocCard, setShowLocCard] = useState(true);
-  const locCardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!myLocation) return;
-    setShowLocCard(true);
-    locCardTimerRef.current = setTimeout(() => setShowLocCard(false), 8000);
-    return () => { if (locCardTimerRef.current) clearTimeout(locCardTimerRef.current); };
-  }, [myLocation?.latitude, myLocation?.longitude]);
+  const dismissHint = () => {}; // no-op: 不再显示底部提示
   // 手机端编辑表单：可收起/展开
   const [draftExpanded, setDraftExpanded] = useState(false);
   // 长按检测 ref
@@ -683,28 +666,9 @@ export default function MapContainer({
         )}
       </form>}
 
-      {myLocation && !draft && showLocCard && (
-        <div className="tf-location-card absolute bottom-4 left-1/2 z-30 flex w-[min(430px,calc(100%-24px))] -translate-x-1/2 items-center gap-2.5 rounded-2xl border border-blue-100 bg-white/95 py-2.5 pl-3.5 pr-2.5 shadow-xl backdrop-blur-md">
-          <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
-            <span className="absolute h-full w-full animate-ping rounded-full bg-blue-500/25" style={{ animationDuration: '1.8s' }} />
-            <span className="h-2.5 w-2.5 rounded-full border-2 border-white bg-blue-600 shadow" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-black uppercase tracking-[0.14em] text-blue-500">当前位置</p>
-            <p className="truncate text-[11px] font-bold text-slate-800">{myLocation.address ?? `${myLocation.latitude.toFixed(5)}, ${myLocation.longitude.toFixed(5)}`}</p>
-          </div>
-          <button type="button" data-testid="create-at-my-location" onClick={createAtMyLocation} className="flex shrink-0 items-center gap-1 rounded-xl bg-blue-600 px-2.5 py-2 text-[10px] font-bold text-white shadow-sm shadow-blue-500/25 transition-transform hover:scale-105 active:scale-95"><MapPin size={11} />以此创建</button>
-          <button type="button" onClick={() => { setShowLocCard(false); if (locCardTimerRef.current) clearTimeout(locCardTimerRef.current); }} className="shrink-0 rounded-md p-1 text-slate-400 hover:text-slate-600"><X size={12} /></button>
-        </div>
-      )}
-
       {!draft && message && <div data-testid="map-message" className="absolute bottom-4 left-3 right-3 z-30 flex max-w-sm items-center gap-2 rounded-xl border border-slate-100 bg-white/95 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow-md">
         <span className="truncate">{message}</span>
         {photoMode && <button type="button" data-testid="photo-draft-cancel" onClick={() => { endPhotoMode(); setMessage(''); }} className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 font-bold text-slate-500 hover:bg-slate-50">不关联照片</button>}
-      </div>}
-      {!draft && !message && showHint && <div className="absolute bottom-4 left-3 right-3 z-30 flex items-center gap-2 rounded-xl border border-slate-100 bg-white/90 px-3 py-2 text-[10px] font-semibold text-slate-500 shadow-md backdrop-blur-sm transition-opacity duration-300">
-        <span className="truncate flex-1">点击标记查看详情 · 长按创建新标记</span>
-        <button type="button" onClick={dismissHint} className="shrink-0 rounded-md p-0.5 text-slate-400 hover:text-slate-600"><X size={12} /></button>
       </div>}
     </div>
   );
