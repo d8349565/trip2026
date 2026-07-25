@@ -12,3 +12,10 @@ uploads/
 *.log
 .env*
 !.env.example
+# 个人测试照片，不入库
+tests/*.jpg
+tests/*.jpeg
+tests/*.png
+tests/*.heic
+# 本地 TLS 证书与私钥
+local-tls/

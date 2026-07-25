@@ -8,11 +8,13 @@ import helmet from 'helmet';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import https from 'https';
 import { fileURLToPath } from 'url';
 import type { Server } from 'node:http';
 import { DbEngine, hashPassword } from './src/dbEngine';
 import { AppDatabase, Place, Trip, TripDay, TripItem, Guide, Checklist, ChecklistItem, Media } from './src/types';
 import { config } from './src/server/config';
+import { wgs84ToGcj02 } from './src/utils/coords';
 import {
   createAuthRouter,
   createSessionMiddleware,
@@ -188,7 +190,18 @@ app.get('/api/map/regeocode', async (req, res) => {
   const url = new URL('https://restapi.amap.com/v3/geocode/regeo');
   url.searchParams.set('key', key);
   url.searchParams.set('location', location);
-  url.searchParams.set('extensions', 'base');
+  url.searchParams.set('extensions', 'all');
+  return requestAmap(res, url);
+});
+
+app.get('/api/map/ip', async (_req, res) => {
+  const key = requireAmapWebServiceKey(res);
+  if (!key) return;
+  // No ip param: AMap locates the requester — the server, which runs on the
+  // same box/network as the users in this private deployment, so its public
+  // IP yields the right city. (Passing a private client IP would be useless.)
+  const url = new URL('https://restapi.amap.com/v3/ip');
+  url.searchParams.set('key', key);
   return requestAmap(res, url);
 });
 
@@ -602,26 +615,6 @@ app.post('/api/places/:id/mark-visited', (req, res) => {
   res.json(dbEngine.togglePlaceVisited(userId, place.id));
 });
 
-app.post('/api/places/:id/favorite', (req, res) => {
-  const db = dbEngine.getRawDb();
-  const index = db.places.findIndex(p => p.id === req.params.id);
-  if (index === -1) return res.status(404).json({ error: '地点不存在' });
-
-  db.places[index].favorite = !db.places[index].favorite;
-  dbEngine.saveDb(db);
-  res.json(db.places[index]);
-});
-
-app.post('/api/places/:id/mark-visited', (req, res) => {
-  const db = dbEngine.getRawDb();
-  const index = db.places.findIndex(p => p.id === req.params.id);
-  if (index === -1) return res.status(404).json({ error: '地点不存在' });
-
-  db.places[index].status = db.places[index].status === 'visited' ? 'want_to_go' : 'visited';
-  dbEngine.saveDb(db);
-  res.json(db.places[index]);
-});
-
 // ---------------- VISITS API ----------------
 
 app.get('/api/visits', (req, res) => {
@@ -640,9 +633,24 @@ app.post('/api/visits', (req, res) => {
   const db = dbEngine.getRawDb();
   if (!db.visits) db.visits = [];
   const visitData = req.body;
-  const targetPlace = db.places.find((place) => place.id === visitData.place_id);
-  if (!targetPlace) return res.status(404).json({ error: { code: 'PLACE_NOT_FOUND', message: 'Place not found' } });
+  const placeIndex = db.places.findIndex((place) => place.id === visitData.place_id);
+  if (placeIndex === -1) return res.status(404).json({ error: { code: 'PLACE_NOT_FOUND', message: 'Place not found' } });
+  const targetPlace = db.places[placeIndex];
   if (!canRead(req, targetPlace)) return forbidden(res);
+
+  const rating = visitData.rating !== undefined ? Number(visitData.rating) : 5;
+  const actualCost = visitData.actual_cost !== undefined ? Number(visitData.actual_cost) : 0;
+  if (!Number.isFinite(rating) || rating < 0 || rating > 5) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'rating must be a number between 0 and 5' } });
+  }
+  if (!Number.isFinite(actualCost) || actualCost < 0) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'actual_cost must be a non-negative number' } });
+  }
+  const revisit = visitData.revisit_intention || 'yes';
+  if (!['yes', 'maybe', 'no'].includes(revisit)) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'revisit_intention must be yes, maybe, or no' } });
+  }
+
   const newVisit = {
     id: 'v_' + Math.random().toString(36).substring(2, 9),
     place_id: visitData.place_id,
@@ -651,15 +659,21 @@ app.post('/api/visits', (req, res) => {
     visit_date: visitData.visit_date || new Date().toISOString().split('T')[0],
     companions: visitData.companions || '',
     weather: visitData.weather || '晴',
-    rating: visitData.rating !== undefined ? parseFloat(visitData.rating) : 5,
+    rating,
     note: visitData.note || '',
-    actual_cost: visitData.actual_cost !== undefined ? parseFloat(visitData.actual_cost) : 0,
-    revisit_intention: visitData.revisit_intention || 'yes'
+    actual_cost: actualCost,
+    revisit_intention: revisit,
   };
 
   db.visits.push(newVisit);
-  
+  // Keep owner status in the snapshot aligned before replaceSnapshot, so a full
+  // rewrite cannot clobber the visit-driven "visited" state for the owner.
+  if (targetPlace.created_by === userId) {
+    db.places[placeIndex] = { ...targetPlace, status: 'visited' };
+  }
+
   dbEngine.saveDb(db);
+  // Always write the current user's per-user state (covers non-owner visitors too).
   dbEngine.markPlaceVisited(userId, visitData.place_id);
   res.json(newVisit);
 });
@@ -999,6 +1013,16 @@ app.post('/api/media/upload', (req, res) => {
 
   fs.writeFileSync(targetPath, buffer);
 
+  // Incoming lat/lng come from the photo's EXIF and are WGS84. Keep the raw
+  // values in exif_* and store GCJ-02 in display_* so markers land correctly
+  // on the AMap map.
+  const exifLatitude = lat !== undefined && lat !== null && lat !== '' ? Number(lat) : NaN;
+  const exifLongitude = lng !== undefined && lng !== null && lng !== '' ? Number(lng) : NaN;
+  const hasGps = Number.isFinite(exifLatitude) && Number.isFinite(exifLongitude)
+    && Math.abs(exifLatitude) <= 90 && Math.abs(exifLongitude) <= 180
+    && (exifLatitude !== 0 || exifLongitude !== 0);
+  const display = hasGps ? wgs84ToGcj02(exifLatitude, exifLongitude) : undefined;
+
   const mediaId = 'm_' + Math.random().toString(36).substring(2, 9);
   const newMedia: Media = {
     id: mediaId,
@@ -1008,10 +1032,10 @@ app.post('/api/media/upload', (req, res) => {
     file_hash: crypto.createHash('md5').update(buffer).digest('hex'),
     file_size: file_size || buffer.length,
     captured_at: captured_at || new Date().toISOString(),
-    exif_latitude: lat ? parseFloat(lat) : undefined,
-    exif_longitude: lng ? parseFloat(lng) : undefined,
-    display_latitude: lat ? parseFloat(lat) : undefined,
-    display_longitude: lng ? parseFloat(lng) : undefined,
+    exif_latitude: hasGps ? exifLatitude : undefined,
+    exif_longitude: hasGps ? exifLongitude : undefined,
+    display_latitude: display?.latitude,
+    display_longitude: display?.longitude,
     place_id,
     trip_id,
     favorite: false,
@@ -1020,7 +1044,21 @@ app.post('/api/media/upload', (req, res) => {
   };
 
   db.media.push(newMedia);
-  dbEngine.saveDb(db);
+  try {
+    dbEngine.saveDb(db);
+  } catch (error) {
+    const rollbackIndex = db.media.indexOf(newMedia);
+    if (rollbackIndex !== -1) db.media.splice(rollbackIndex, 1);
+    try { fs.unlinkSync(targetPath); } catch { /* best-effort orphan cleanup */ }
+    const code = (error as { code?: string } | null)?.code ?? '';
+    const message = error instanceof Error ? error.message : String(error);
+    if (code === 'SQLITE_CONSTRAINT_UNIQUE' || message.includes('UNIQUE constraint failed')) {
+      return res.status(409).json({
+        error: { code: 'DUPLICATE_MEDIA', message: '这张照片已经上传过（内容相同），无需重复上传。' },
+      });
+    }
+    throw error;
+  }
   res.json(newMedia);
 });
 
@@ -1380,11 +1418,11 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
 });
 
-let activeServer: Server | undefined;
+let activeServer: Server | https.Server | undefined;
 let closeDevelopmentServer: (() => Promise<void>) | undefined;
 
 // Server client files
-export async function startServer(): Promise<Server> {
+export async function startServer(): Promise<Server | https.Server> {
   if (activeServer) return activeServer;
   if (!config.isProduction) {
     const { createServer: createViteServer } = await import('vite');
@@ -1409,9 +1447,20 @@ export async function startServer(): Promise<Server> {
     }
   }
 
-  activeServer = app.listen(config.port, config.host, () => {
-    console.log(`Server listening on http://${config.host}:${config.port} (${config.environment})`);
-  });
+  const scheme = config.tlsCertPath && config.tlsKeyPath ? 'https' : 'http';
+  if (scheme === 'https') {
+    activeServer = https.createServer({
+      cert: fs.readFileSync(config.tlsCertPath as string),
+      key: fs.readFileSync(config.tlsKeyPath as string),
+    }, app);
+    activeServer.listen(config.port, config.host, () => {
+      console.log(`Server listening on https://${config.host}:${config.port} (${config.environment}, TLS)`);
+    });
+  } else {
+    activeServer = app.listen(config.port, config.host, () => {
+      console.log(`Server listening on http://${config.host}:${config.port} (${config.environment})`);
+    });
+  }
   return activeServer;
 }
 

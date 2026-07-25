@@ -15,6 +15,8 @@ interface MobileMapPageProps {
   onRequestEditor: () => void;
   editorRequest: number;
   editRequest: { token: number; place: Place } | null;
+  photoDraft: { token: number; mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string } | null;
+  onPhotoDraftEnd: () => void;
   onToggleFavorite: (id: string) => void;
   onAddToTrip: (placeId: string) => void;
   categoryColors: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }>;
@@ -33,6 +35,8 @@ export default function MobileMapPage({
   onRequestEditor,
   editorRequest,
   editRequest,
+  photoDraft,
+  onPhotoDraftEnd,
   onToggleFavorite,
   onAddToTrip,
   categoryColors,
@@ -139,6 +143,8 @@ export default function MobileMapPage({
           onDeletePlace={onDeletePlace}
           editorRequest={editorRequest}
           editRequest={editRequest}
+          photoDraft={photoDraft}
+          onPhotoDraftEnd={onPhotoDraftEnd}
           categoryColors={categoryColors}
           categoryLabels={categoryLabels}
           categoryIcons={categoryIcons}

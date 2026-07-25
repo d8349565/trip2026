@@ -103,15 +103,22 @@ export class DbEngine {
   }
 
   togglePlaceFavorite(userId: string, placeId: string) {
-    return this.store.setPlaceState(userId, placeId, 'favorite');
+    const place = this.store.setPlaceState(userId, placeId, 'favorite');
+    // Keep the in-memory snapshot aligned so a later saveDb() does not
+    // overwrite per-user place state with stale owner status/favorite.
+    this.db = this.store.readSnapshot();
+    return place;
   }
 
   togglePlaceVisited(userId: string, placeId: string) {
-    return this.store.setPlaceState(userId, placeId, 'status');
+    const place = this.store.setPlaceState(userId, placeId, 'status');
+    this.db = this.store.readSnapshot();
+    return place;
   }
 
   markPlaceVisited(userId: string, placeId: string) {
     this.store.markPlaceVisited(userId, placeId);
+    this.db = this.store.readSnapshot();
   }
 
   // Formal backup/restore is intentionally deferred. Keep these methods only

@@ -162,6 +162,64 @@ test('health, authentication, session rotation, and API guards work', async (con
   assert.equal(protectedFieldBody.id, sharedPlace.id);
   assert.equal(protectedFieldBody.created_by, 'u_admin');
 
+  // Creating a visit must mark the place visited without a separate toggle, and a
+  // later place edit must not wipe that per-user status via snapshot rewrite.
+  const visitResponse = await fetch(`${baseUrl}/api/visits`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: loginCookie },
+    body: JSON.stringify({
+      place_id: sharedPlace.id,
+      visit_date: '2026-07-01',
+      rating: 4,
+      note: 'Great day out',
+      revisit_intention: 'yes',
+    }),
+  });
+  assert.equal(visitResponse.status, 200);
+  const createdVisit = await visitResponse.json();
+  assert.equal(createdVisit.place_id, sharedPlace.id);
+  assert.equal(createdVisit.rating, 4);
+
+  const placesAfterVisit = await fetch(`${baseUrl}/api/places`, { headers: { Cookie: loginCookie } })
+    .then((response) => response.json());
+  const visitedPlace = placesAfterVisit.find((place: { id: string }) => place.id === sharedPlace.id);
+  assert.equal(visitedPlace?.status, 'visited');
+
+  const renameAfterVisit = await fetch(`${baseUrl}/api/places/${sharedPlace.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Cookie: loginCookie },
+    body: JSON.stringify({ name: 'Renamed after visit' }),
+  });
+  assert.equal(renameAfterVisit.status, 200);
+  assert.equal((await renameAfterVisit.json()).name, 'Renamed after visit');
+
+  const placesAfterRename = await fetch(`${baseUrl}/api/places`, { headers: { Cookie: loginCookie } })
+    .then((response) => response.json());
+  const stillVisited = placesAfterRename.find((place: { id: string }) => place.id === sharedPlace.id);
+  assert.equal(stillVisited?.status, 'visited');
+  assert.equal(stillVisited?.name, 'Renamed after visit');
+
+  // Owner favorite toggle + subsequent place edit must keep both favorite and visited.
+  const ownerFavorite = await fetch(`${baseUrl}/api/places/${sharedPlace.id}/favorite`, {
+    method: 'POST',
+    headers: { Cookie: loginCookie },
+  });
+  assert.equal(ownerFavorite.status, 200);
+  assert.equal((await ownerFavorite.json()).favorite, true);
+
+  const summaryAfterFavorite = await fetch(`${baseUrl}/api/places/${sharedPlace.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Cookie: loginCookie },
+    body: JSON.stringify({ summary: 'Updated after favorite toggle' }),
+  });
+  assert.equal(summaryAfterFavorite.status, 200);
+  const placeAfterStateEdits = await fetch(`${baseUrl}/api/places/${sharedPlace.id}`, {
+    headers: { Cookie: loginCookie },
+  }).then((response) => response.json());
+  assert.equal(placeAfterStateEdits.favorite, true);
+  assert.equal(placeAfterStateEdits.status, 'visited');
+  assert.equal(placeAfterStateEdits.summary, 'Updated after favorite toggle');
+
   const invalidTripResponse = await fetch(`${baseUrl}/api/trips`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Cookie: loginCookie },

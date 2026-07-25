@@ -29,7 +29,7 @@ interface PlaceDetailPaneProps {
   onNavigateToView?: (view: 'map' | 'trip' | 'photos' | 'checklist' | 'guide', id?: string) => void;
   onCreateVisit?: (visit: Partial<Visit>) => Promise<void>; // added
   onCreateGuide?: (guide: Partial<Guide>) => Promise<void>; // added
-  onUploadPhoto?: (photoData: { filename: string; file_size: number; dataUrl: string; place_id: string }) => Promise<void>; // added
+  onUploadPhoto?: (photoData: { filename: string; file_size: number; dataUrl: string; place_id: string }) => Promise<unknown>; // added
   onEditPlace?: (place: Place) => void;
 }
 

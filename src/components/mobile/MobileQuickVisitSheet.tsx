@@ -11,7 +11,6 @@ interface MobileQuickVisitSheetProps {
   activeTrip: Trip | null;
   activeDay: TripDay | null;
   onCreateVisit: (visitData: Partial<Visit>) => Promise<any>;
-  onMarkVisited: (placeId: string) => Promise<any>;
 }
 
 export default function MobileQuickVisitSheet({
@@ -23,7 +22,6 @@ export default function MobileQuickVisitSheet({
   activeTrip,
   activeDay,
   onCreateVisit,
-  onMarkVisited,
 }: MobileQuickVisitSheetProps) {
   if (!isOpen) return null;
 
@@ -86,13 +84,8 @@ export default function MobileQuickVisitSheet({
         note: note || undefined,
       };
 
-      // 1. Create visit record
+      // Creating a visit marks the place as visited on the server.
       await onCreateVisit(visitData);
-
-      // 2. Automatically mark place as visited
-      if (selectedPlace.status !== 'visited') {
-        await onMarkVisited(selectedPlace.id);
-      }
 
       alert(`成功记录到访「${selectedPlace.name}」并已标记为已去过！`);
       onClose();

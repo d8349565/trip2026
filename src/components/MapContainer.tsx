@@ -4,8 +4,9 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Edit3, Link2, LocateFixed, MapPin, Minus, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, Crosshair, Edit3, Link2, LocateFixed, MapPin, Minus, Plus, Search, Trash2, X } from 'lucide-react';
 import { api, type AmapPoi } from '../api';
+import { wgs84ToGcj02 } from '../utils/coords';
 import type { Place, PlaceCategory } from '../types';
 
 interface MapContainerProps {
@@ -17,6 +18,8 @@ interface MapContainerProps {
   onDeletePlace: (id: string) => Promise<void>;
   editorRequest?: number;
   editRequest?: { token: number; place: Place } | null;
+  photoDraft?: { token: number; mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string } | null;
+  onPhotoDraftEnd?: () => void;
   categoryColors: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }>;
   categoryLabels: Record<PlaceCategory, string>;
   categoryIcons: Record<PlaceCategory, React.ReactNode>;
@@ -113,6 +116,8 @@ export default function MapContainer({
   onDeletePlace,
   editorRequest = 0,
   editRequest = null,
+  photoDraft = null,
+  onPhotoDraftEnd,
   categoryLabels,
 }: MapContainerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -133,14 +138,30 @@ export default function MapContainer({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [contextMenu, setContextMenu] = useState<{ place: Place; x: number; y: number } | null>(null);
+  const [photoMode, setPhotoMode] = useState<string | null>(null);
+  const photoModeRef = useRef<string | null>(null);
+  const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number; address?: string; name?: string } | null>(null);
+  const myLocMarkerRef = useRef<unknown | undefined>(undefined);
   const initialCenterRef = useRef(mapCenter(places));
+
+  const enterPhotoMode = (mediaId: string) => {
+    photoModeRef.current = mediaId;
+    setPhotoMode(mediaId);
+  };
+  const endPhotoMode = () => {
+    if (!photoModeRef.current) return;
+    photoModeRef.current = null;
+    setPhotoMode(null);
+    onPhotoDraftEnd?.();
+  };
 
   const reversePosition = async (latitude: number, longitude: number) => {
     setDraft((current) => current ? { ...current, latitude, longitude } : current);
     try {
       const location = await api.reverseGeocode(latitude, longitude);
+      const { name, ...fields } = location;
       setDraft((current) => current && current.latitude === latitude && current.longitude === longitude
-        ? { ...current, ...location }
+        ? { ...current, ...fields, ...(current.name ? {} : name ? { name } : {}) }
         : current);
     } catch {
       setMessage('坐标已更新，但地址反查失败；可手动修改地址。');
@@ -164,6 +185,7 @@ export default function MapContainer({
 
   useEffect(() => {
     if (!editRequest) return;
+    endPhotoMode();
     const place = editRequest.place;
     setEditingId(place.id);
     setDraft({ ...place });
@@ -171,6 +193,18 @@ export default function MapContainer({
     setMessage('正在编辑已有地点；可拖动蓝色标记调整位置。');
     mapRef.current?.setZoomAndCenter(16, [place.longitude, place.latitude]);
   }, [editRequest?.token]);
+
+  useEffect(() => {
+    if (!photoDraft) return;
+    const { latitude, longitude, name, address } = photoDraft;
+    enterPhotoMode(photoDraft.mediaId);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      startDraftAt(latitude as number, longitude as number, { name: name ?? '', address: address ?? '' });
+      setMessage('已根据照片拍摄位置预填。可拖动蓝色标记微调，保存后照片会自动关联到这个地点。');
+    } else {
+      setMessage('这张照片没有位置信息。请在地图上双击选择拍摄位置，保存标记后会自动关联照片。');
+    }
+  }, [photoDraft?.token]);
 
   useEffect(() => {
     let disposed = false;
@@ -192,6 +226,15 @@ export default function MapContainer({
       });
       mapRef.current = map;
       setReady(true);
+      // 先恢复上次记住的位置（立即显示蓝点，无需等待授权），再尝试刷新到最新位置
+      const saved = (() => {
+        try { return JSON.parse(localStorage.getItem(MY_LOCATION_KEY) ?? 'null'); } catch { return null; }
+      })();
+      if (saved && Number.isFinite(saved.latitude) && Number.isFinite(saved.longitude)) {
+        applyMyLocation(saved.latitude, saved.longitude, 15);
+        void refreshMyLocationAddress(saved.latitude, saved.longitude);
+      }
+      void locateAndCenter();
     }).catch((cause) => {
       if (!disposed) setError(cause instanceof Error ? cause.message : '高德地图加载失败');
     });
@@ -275,9 +318,108 @@ export default function MapContainer({
     };
   }, [draft?.latitude, draft?.longitude, ready]);
 
+  // 我的位置标记：蓝色脉冲圆点，可拖动重新设定位置（美团式交互）
+  useEffect(() => {
+    const map = mapRef.current;
+    const AMap = window.AMap;
+    if (!ready || !map || !AMap) return;
+    if (myLocMarkerRef.current) map.remove(myLocMarkerRef.current);
+    if (!myLocation || !Number.isFinite(myLocation.latitude) || !Number.isFinite(myLocation.longitude)) {
+      myLocMarkerRef.current = undefined;
+      return;
+    }
+    const content = document.createElement('div');
+    content.className = 'tf-my-location';
+    content.innerHTML = `
+      <span class="tf-pulse-ring"></span>
+      <span class="tf-pulse-ring tf-pulse-ring-late"></span>
+      <span class="tf-my-dot"></span>`;
+    const marker = new AMap.Marker({
+      position: [myLocation.longitude, myLocation.latitude],
+      content, draggable: true, cursor: 'move', anchor: 'center', zIndex: 450,
+    });
+    marker.on('dragend', (event) => {
+      if (!event.lnglat) return;
+      const latitude = Number(event.lnglat.getLat().toFixed(6));
+      const longitude = Number(event.lnglat.getLng().toFixed(6));
+      applyMyLocation(latitude, longitude);
+      void refreshMyLocationAddress(latitude, longitude);
+      setMessage('当前位置已更新，可继续拖动蓝点调整。');
+    });
+    map.add(marker);
+    myLocMarkerRef.current = marker;
+    return () => {
+      if (myLocMarkerRef.current && mapRef.current) mapRef.current.remove(myLocMarkerRef.current);
+      myLocMarkerRef.current = undefined;
+    };
+  }, [myLocation?.latitude, myLocation?.longitude, ready]);
+
   useEffect(() => {
     if (selectedPlace && mapRef.current && !draft) mapRef.current.setCenter([selectedPlace.longitude, selectedPlace.latitude]);
   }, [draft, selectedPlace]);
+
+  // ---- 我的位置：蓝色脉冲定位点，可拖动重新设定，位置记住到本地 ----
+  const MY_LOCATION_KEY = 'tf-my-location';
+
+  const applyMyLocation = (latitude: number, longitude: number, zoom?: number) => {
+    setMyLocation((current) => current && current.latitude === latitude && current.longitude === longitude
+      ? current
+      : { latitude, longitude });
+    try {
+      localStorage.setItem(MY_LOCATION_KEY, JSON.stringify({ latitude, longitude }));
+    } catch { /* storage unavailable */ }
+    if (zoom) mapRef.current?.setZoomAndCenter(zoom, [longitude, latitude]);
+  };
+
+  const refreshMyLocationAddress = async (latitude: number, longitude: number) => {
+    try {
+      const location = await api.reverseGeocode(latitude, longitude);
+      setMyLocation((current) => current && current.latitude === latitude && current.longitude === longitude
+        ? { ...current, address: location.address || undefined, name: location.name }
+        : current);
+    } catch {
+      // Keep the coordinates-only display in the location card.
+    }
+  };
+
+  // Center the map on the user: precise browser geolocation first (works on
+  // localhost/HTTPS; browsers block it on plain-HTTP LAN addresses), then
+  // AMap IP city location, then keep the last remembered / centroid default.
+  const locateAndCenter = async () => {
+    if ('geolocation' in navigator) {
+      const positioned = await new Promise<boolean>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = wgs84ToGcj02(position.coords.latitude, position.coords.longitude);
+            applyMyLocation(latitude, longitude, 15);
+            void refreshMyLocationAddress(latitude, longitude);
+            resolve(true);
+          },
+          () => resolve(false),
+          { timeout: 8000, maximumAge: 300000 },
+        );
+      });
+      if (positioned) return;
+    }
+    try {
+      const point = await api.locateByIp();
+      if (point) {
+        applyMyLocation(point.latitude, point.longitude, 11);
+        void refreshMyLocationAddress(point.latitude, point.longitude);
+      }
+    } catch {
+      // Keep the default center derived from existing places.
+    }
+  };
+
+  const createAtMyLocation = () => {
+    if (!myLocation) return;
+    startDraftAt(myLocation.latitude, myLocation.longitude, {
+      name: myLocation.name ?? '',
+      address: myLocation.address ?? '',
+    });
+    setMessage('已把当前位置填入表单，可拖动蓝色标记微调后保存。');
+  };
 
   const searchPoi = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -296,6 +438,7 @@ export default function MapContainer({
   };
 
   const choosePoi = (poi: AmapPoi) => {
+    endPhotoMode();
     const [longitude, latitude] = poi.location.split(',').map(Number);
     const address = Array.isArray(poi.address) ? poi.address.join('') : poi.address;
     setPois([]);
@@ -314,6 +457,7 @@ export default function MapContainer({
   const resolveShare = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!shareUrl.trim()) return;
+    endPhotoMode();
     setBusy(true);
     setMessage('');
     try {
@@ -370,6 +514,7 @@ export default function MapContainer({
         : await onCreatePlace(draft);
       setDraft(null);
       setEditingId(null);
+      endPhotoMode();
       onSelectPlace(saved);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : '地点保存失败');
@@ -416,6 +561,7 @@ export default function MapContainer({
         <button onClick={() => mapRef.current?.setZoom(Math.min(20, (mapRef.current?.getZoom() ?? 12) + 1))} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="放大"><Plus size={18} /></button>
         <button onClick={() => mapRef.current?.setZoom(Math.max(3, (mapRef.current?.getZoom() ?? 12) - 1))} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="缩小"><Minus size={18} /></button>
         <button onClick={() => mapRef.current?.setZoomAndCenter(places.length > 1 ? 11 : 13, mapCenter(places))} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="显示全部地点"><LocateFixed size={18} /></button>
+        <button onClick={() => void locateAndCenter()} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="定位到当前位置"><Crosshair size={18} /></button>
       </div>
 
       {contextMenu && <div data-testid="marker-context-menu" style={{ left: Math.min(contextMenu.x, (rootRef.current?.clientWidth ?? 300) - 150), top: Math.min(contextMenu.y, (rootRef.current?.clientHeight ?? 300) - 100) }} className="absolute z-50 w-36 overflow-hidden rounded-xl border border-slate-100 bg-white p-1.5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
@@ -425,7 +571,7 @@ export default function MapContainer({
       </div>}
 
       {draft && <form data-testid="map-place-editor" onSubmit={savePlace} onClick={(event) => event.stopPropagation()} className="absolute bottom-12 left-3 z-40 max-h-[66vh] w-[min(390px,calc(100%-24px))] overflow-y-auto rounded-2xl border border-slate-100 bg-white/98 p-4 shadow-2xl backdrop-blur-md sm:bottom-4">
-        <div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-800">{editingId ? '编辑地点' : '确认地图标记'}</h3><p className="mt-0.5 text-[10px] text-blue-600">拖动地图上的蓝色标记可调整坐标</p></div><button type="button" onClick={() => { setDraft(null); setEditingId(null); setMessage(''); }} className="rounded-full bg-slate-100 p-2 text-slate-500"><X size={15} /></button></div>
+        <div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-800">{editingId ? '编辑地点' : '确认地图标记'}</h3><p className="mt-0.5 text-[10px] text-blue-600">拖动地图上的蓝色标记可调整坐标</p></div><button type="button" onClick={() => { setDraft(null); setEditingId(null); setMessage(''); endPhotoMode(); }} className="rounded-full bg-slate-100 p-2 text-slate-500"><X size={15} /></button></div>
         <div className="grid grid-cols-2 gap-2">
           <label className="col-span-2"><span className="mb-1 block text-[10px] font-bold text-slate-400">地点名称</span><input required value={draft.name ?? ''} onChange={(event) => updateDraft('name', event.target.value)} className={inputClass} /></label>
           <label><span className="mb-1 block text-[10px] font-bold text-slate-400">分类</span><select value={draft.category_id} onChange={(event) => updateDraft('category_id', event.target.value)} className={inputClass}>{(Object.keys(categoryLabels) as PlaceCategory[]).map((category) => <option key={category} value={category}>{categoryLabels[category]}</option>)}</select></label>
@@ -447,7 +593,24 @@ export default function MapContainer({
         <button disabled={busy} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-3 text-xs font-bold text-white disabled:opacity-50"><Check size={15} />{editingId ? '保存修改' : '保存并生成标记'}</button>
       </form>}
 
-      {!draft && message && <div className="absolute bottom-4 left-3 z-30 max-w-sm rounded-xl border border-slate-100 bg-white/95 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow-md">{message}</div>}
+      {myLocation && !draft && (
+        <div className="tf-location-card absolute bottom-4 left-1/2 z-30 flex w-[min(430px,calc(100%-24px))] -translate-x-1/2 items-center gap-2.5 rounded-2xl border border-blue-100 bg-white/95 py-2.5 pl-3.5 pr-2.5 shadow-xl backdrop-blur-md">
+          <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+            <span className="absolute h-full w-full animate-ping rounded-full bg-blue-500/25" style={{ animationDuration: '1.8s' }} />
+            <span className="h-2.5 w-2.5 rounded-full border-2 border-white bg-blue-600 shadow" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] font-black uppercase tracking-[0.14em] text-blue-500">当前位置 · 可拖动蓝点调整</p>
+            <p className="truncate text-[11px] font-bold text-slate-800">{myLocation.address ?? `${myLocation.latitude.toFixed(5)}, ${myLocation.longitude.toFixed(5)}`}</p>
+          </div>
+          <button type="button" data-testid="create-at-my-location" onClick={createAtMyLocation} className="flex shrink-0 items-center gap-1 rounded-xl bg-blue-600 px-2.5 py-2 text-[10px] font-bold text-white shadow-sm shadow-blue-500/25 transition-transform hover:scale-105 active:scale-95"><MapPin size={11} />以此创建标记</button>
+        </div>
+      )}
+
+      {!draft && message && <div data-testid="map-message" className="absolute bottom-4 left-3 z-30 flex max-w-sm items-center gap-2 rounded-xl border border-slate-100 bg-white/95 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow-md">
+        <span>{message}</span>
+        {photoMode && <button type="button" data-testid="photo-draft-cancel" onClick={() => { endPhotoMode(); setMessage(''); }} className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 font-bold text-slate-500 hover:bg-slate-50">不关联照片</button>}
+      </div>}
       {!draft && !message && <div className="absolute bottom-4 left-3 z-30 rounded-xl border border-slate-100 bg-white/90 p-2 text-[10px] font-semibold text-slate-500 shadow-md">双击地图手动选点 · 点击标记查看 · 右键标记管理</div>}
     </div>
   );

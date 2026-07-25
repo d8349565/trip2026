@@ -17,7 +17,7 @@ interface MobilePlaceDetailPageProps {
   onBack: () => void;
   onToggleFavorite: (id: string) => void;
   onAddToTrip: (placeId: string, tripDayId: string, type: string, time: string, note: string) => void;
-  onUploadPhoto?: (photoData: { filename: string; file_size: number; dataUrl: string; place_id: string }) => Promise<void>;
+  onUploadPhoto?: (photoData: { filename: string; file_size: number; dataUrl: string; place_id: string }) => Promise<unknown>;
   onCreateVisit?: (visit: Partial<Visit>) => Promise<void>;
   onEditPlace?: (place: Place) => void;
   categoryColors: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }>;

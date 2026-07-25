@@ -1,1 +1,51 @@
 @import "tailwindcss";
+
+/* ---- 我的位置（可拖动的蓝色定位点，美团式脉冲光环） ---- */
+.tf-my-location {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.tf-pulse-ring {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  background: rgba(37, 99, 235, 0.16);
+  animation: tf-pulse 2.4s ease-out infinite;
+}
+
+.tf-pulse-ring-late {
+  animation-delay: 1.2s;
+}
+
+@keyframes tf-pulse {
+  0% { transform: scale(0.35); opacity: 0.95; }
+  70% { opacity: 0.3; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+.tf-my-dot {
+  position: relative;
+  width: 17px;
+  height: 17px;
+  border-radius: 9999px;
+  background: #2563eb;
+  border: 3.5px solid #fff;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.4);
+}
+
+/* 底部「当前位置」浮层卡片 */
+@keyframes tf-rise {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.tf-location-card {
+  animation: tf-rise 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

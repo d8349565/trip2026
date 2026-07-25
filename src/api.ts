@@ -120,16 +120,31 @@ export const api = {
     return result.pois ?? [];
   },
 
-  reverseGeocode: async (latitude: number, longitude: number): Promise<{ address: string; province?: string; city?: string; district?: string }> => {
-    const result = await request<{ regeocode?: { formatted_address?: string; addressComponent?: { province?: string; city?: string | string[]; district?: string } } }>(
+  reverseGeocode: async (latitude: number, longitude: number): Promise<{ address: string; name?: string; province?: string; city?: string; district?: string }> => {
+    const result = await request<{ regeocode?: { formatted_address?: string; addressComponent?: { province?: string; city?: string | string[]; district?: string }; pois?: Array<{ name?: string }>; aois?: Array<{ name?: string }> } }>(
       `/api/map/regeocode?location=${encodeURIComponent(`${longitude},${latitude}`)}`,
     );
     const component = result.regeocode?.addressComponent;
+    const nearestName = result.regeocode?.pois?.[0]?.name ?? result.regeocode?.aois?.[0]?.name;
     return {
       address: result.regeocode?.formatted_address ?? '',
+      name: nearestName || undefined,
       province: component?.province,
       city: Array.isArray(component?.city) ? component.city[0] : component?.city,
       district: component?.district,
+    };
+  },
+
+  locateByIp: async (): Promise<{ latitude: number; longitude: number } | null> => {
+    const result = await request<{ rectangle?: string }>(`/api/map/ip`);
+    // rectangle: "lng1,lat1;lng2,lat2" bounding box of the located city
+    if (typeof result.rectangle !== 'string' || !result.rectangle.includes(';')) return null;
+    const [cornerA, cornerB] = result.rectangle.split(';').map((pair) => pair.split(',').map(Number));
+    if (!cornerA || !cornerB || cornerA.length !== 2 || cornerB.length !== 2
+      || ![...cornerA, ...cornerB].every(Number.isFinite)) return null;
+    return {
+      latitude: (cornerA[1] + cornerB[1]) / 2,
+      longitude: (cornerA[0] + cornerB[0]) / 2,
     };
   },
 
@@ -291,13 +306,21 @@ export const api = {
   uploadMedia: async (data: { filename: string; file_size: number; dataUrl: string; place_id?: string; trip_id?: string; captured_at?: string; lat?: number; lng?: number }, userId?: string): Promise<Media> => {
     const res = await fetch(`${API_BASE}/api/media/upload`, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         ...(userId ? { 'x-user-id': userId } : {})
       },
       body: JSON.stringify(data)
     });
-    if (!res.ok) throw new Error('Upload failed');
+    if (!res.ok) {
+      let message = '上传失败';
+      try {
+        const body = await res.json();
+        if (typeof body?.error?.message === 'string') message = body.error.message;
+        else if (typeof body?.error === 'string') message = body.error;
+      } catch { /* keep the generic message */ }
+      throw new Error(message);
+    }
     return res.json();
   },
 
@@ -422,6 +445,13 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null) as { error?: { message?: string } | string } | null;
+      const message = typeof body?.error === 'string'
+        ? body.error
+        : body?.error?.message || 'Failed to create visit';
+      throw new Error(message);
+    }
     return res.json();
   },
 

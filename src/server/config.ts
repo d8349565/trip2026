@@ -47,4 +47,6 @@ export const config = Object.freeze({
   amapWebKey: process.env.AMAP_WEB_KEY?.trim(),
   amapWebServiceKey: process.env.AMAP_WEB_SERVICE_KEY?.trim(),
   amapSecurityJsCode: process.env.AMAP_SECURITY_JSCODE?.trim(),
+  tlsCertPath: process.env.APP_TLS_CERT?.trim() || undefined,
+  tlsKeyPath: process.env.APP_TLS_KEY?.trim() || undefined,
 });

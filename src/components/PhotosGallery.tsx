@@ -5,8 +5,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Media, Place, Trip } from '../types';
-import { 
-  Camera, Trash2, Heart, Calendar, MapPin, UploadCloud, X, 
+import { api } from '../api';
+import { type PhotoExif } from '../utils/photoExif';
+import { preparePhotoForUpload } from '../utils/photoUpload';
+import {
+  Camera, Trash2, Heart, Calendar, MapPin, UploadCloud, X,
   Clock, Compass, Info, ZoomIn, Star, Filter, Image as ImageIcon
 } from 'lucide-react';
 
@@ -14,9 +17,10 @@ interface PhotosGalleryProps {
   media: Media[];
   places: Place[];
   trips: Trip[];
-  onUploadMedia: (data: { filename: string; file_size: number; dataUrl: string; place_id?: string; trip_id?: string; captured_at?: string }) => void;
+  onUploadMedia: (data: { filename: string; file_size: number; dataUrl: string; place_id?: string; trip_id?: string; captured_at?: string; lat?: number; lng?: number }) => Promise<Media | void> | void;
   onDeleteMedia: (id: string) => void;
   onToggleFavoriteMedia: (id: string, fav: boolean) => void;
+  onCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => void;
   initialSelectedPlaceId?: string | null;
 }
 
@@ -27,6 +31,7 @@ export default function PhotosGallery({
   onUploadMedia,
   onDeleteMedia,
   onToggleFavoriteMedia,
+  onCreatePlaceFromPhoto,
   initialSelectedPlaceId
 }: PhotosGalleryProps) {
   const [selectedPlaceId, setSelectedPlaceId] = useState(initialSelectedPlaceId || '');
@@ -42,6 +47,9 @@ export default function PhotosGallery({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const [fileSize, setFileSize] = useState(0);
+  const [pendingExif, setPendingExif] = useState<PhotoExif>({});
+  const [isUploading, setIsUploading] = useState(false);
+  const [photoPrompt, setPhotoPrompt] = useState<{ mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string; recognized: boolean } | null>(null);
 
   // Sync initial selected place ID if redirected from other views
   useEffect(() => {
@@ -128,54 +136,24 @@ export default function PhotosGallery({
   };
 
   // Handle local image file load & compress
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    loadAndCompressFile(file);
+    // Read EXIF from the original and compress via the shared pipeline.
+    const prepared = await preparePhotoForUpload(file);
+    setFileName(prepared.fileName);
+    setFileSize(prepared.fileSize);
+    setPendingExif(prepared.exif);
+    if (prepared.exif.capturedAt) {
+      setUploadCapturedDate(prepared.exif.capturedAt.split('T')[0]);
+    }
+    setPreviewUrl(prepared.dataUrl);
   };
 
-  const loadAndCompressFile = (file: File) => {
-    setFileName(file.name);
-    setFileSize(file.size);
-
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1200;
-        const MAX_HEIGHT = 1200;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        setPreviewUrl(dataUrl);
-      };
-      img.src = uploadEvent.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleUploadSubmit = (e: React.FormEvent) => {
+  const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!previewUrl) return;
+    if (!previewUrl || isUploading) return;
+    setIsUploading(true);
 
     // Auto-match trip if trip not set but date matches
     let finalTripId = uploadTripId;
@@ -188,25 +166,99 @@ export default function PhotosGallery({
       }
     }
 
-    onUploadMedia({
-      filename: fileName,
-      file_size: fileSize,
-      dataUrl: previewUrl,
-      place_id: uploadPlaceId || undefined,
-      trip_id: finalTripId || undefined,
-      captured_at: new Date(uploadCapturedDate).toISOString()
-    });
+    try {
+      const created = await onUploadMedia({
+        filename: fileName,
+        file_size: fileSize,
+        dataUrl: previewUrl,
+        place_id: uploadPlaceId || undefined,
+        trip_id: finalTripId || undefined,
+        captured_at: new Date(uploadCapturedDate).toISOString(),
+        lat: pendingExif.latitude,
+        lng: pendingExif.longitude
+      });
 
-    setPreviewUrl(null);
-    setFileName('');
-    setFileSize(0);
-    setUploadPlaceId('');
-    setUploadTripId('');
-    setShowUploadModal(false);
+      // Offer marker creation when the photo was uploaded without a place.
+      if (created && !uploadPlaceId) {
+        if (Number.isFinite(created.display_latitude) && Number.isFinite(created.display_longitude)) {
+          let address = '';
+          let name: string | undefined;
+          try {
+            const location = await api.reverseGeocode(created.display_latitude as number, created.display_longitude as number);
+            address = location.address;
+            name = location.name;
+          } catch {
+            // Coordinates are still usable; the form can reverse-geocode again.
+          }
+          setPhotoPrompt({
+            mediaId: created.id,
+            latitude: created.display_latitude,
+            longitude: created.display_longitude,
+            name,
+            address,
+            recognized: true
+          });
+        } else {
+          setPhotoPrompt({ mediaId: created.id, recognized: false });
+        }
+      }
+    } finally {
+      setIsUploading(false);
+      setPreviewUrl(null);
+      setFileName('');
+      setFileSize(0);
+      setUploadPlaceId('');
+      setUploadTripId('');
+      setPendingExif({});
+      setShowUploadModal(false);
+    }
   };
 
   return (
     <div className="space-y-6 flex flex-col h-full overflow-hidden">
+      {/* Photo location recognition prompt */}
+      {photoPrompt && (
+        <div data-testid="photo-place-prompt" className="flex flex-wrap items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 shrink-0">
+          <MapPin size={16} className="text-blue-600 shrink-0" />
+          <p className="min-w-0 flex-1 text-xs font-semibold text-blue-800">
+            {photoPrompt.recognized
+              ? `已识别拍摄地点：${photoPrompt.address || '地图位置'}。是否为这里创建标记点？`
+              : (
+                <>
+                  这张照片未检测到位置信息，可以在地图上手动选点创建标记。
+                  <span className="mt-1 block text-[10px] font-medium text-blue-500/90">
+                    常见原因：手机系统分享照片时会抹掉位置（小米：相册设置 → 隐私保护 → 关闭「去除位置信息」）；微信内置浏览器上传也会抹掉位置。下次可试用「拍照上传」，相机直出保留位置。
+                  </span>
+                </>
+              )}
+          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              data-testid="photo-place-create"
+              onClick={() => {
+                onCreatePlaceFromPhoto({
+                  mediaId: photoPrompt.mediaId,
+                  latitude: photoPrompt.latitude,
+                  longitude: photoPrompt.longitude,
+                  name: photoPrompt.name,
+                  address: photoPrompt.address
+                });
+                setPhotoPrompt(null);
+              }}
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700"
+            >
+              {photoPrompt.recognized ? '去创建标记' : '去地图选点'}
+            </button>
+            <button
+              onClick={() => setPhotoPrompt(null)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-50"
+            >
+              忽略
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Photo Header Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-100 shrink-0">
         <div>
@@ -558,17 +610,31 @@ export default function PhotosGallery({
                     </div>
                   </div>
                 ) : (
-                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl h-36 bg-slate-50 hover:bg-slate-100/50 hover:border-slate-300 cursor-pointer transition-all">
-                    <UploadCloud size={28} className="text-slate-400 mb-1" />
-                    <span className="text-xs font-bold text-slate-600">点击上传或拖拽文件到这里</span>
-                    <span className="text-[10px] text-slate-400 mt-1">支持 JPG / PNG，系统自动高速压缩在 1MB 内</span>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleFileChange}
-                      className="hidden" 
-                    />
-                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-blue-200 rounded-xl h-36 bg-blue-50/60 hover:bg-blue-100/50 hover:border-blue-300 cursor-pointer transition-all">
+                      <Camera size={28} className="text-blue-500 mb-1" />
+                      <span className="text-xs font-bold text-blue-700">拍照上传</span>
+                      <span className="text-[10px] text-blue-400 mt-1 text-center leading-tight px-2">调用摄像头直出，保留位置信息</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl h-36 bg-slate-50 hover:bg-slate-100/50 hover:border-slate-300 cursor-pointer transition-all">
+                      <UploadCloud size={28} className="text-slate-400 mb-1" />
+                      <span className="text-xs font-bold text-slate-600">选择照片文件</span>
+                      <span className="text-[10px] text-slate-400 mt-1 text-center leading-tight px-2">JPG / PNG 原图，自动压缩存储</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                 )}
               </div>
 
@@ -629,10 +695,10 @@ export default function PhotosGallery({
                 </button>
                 <button
                   type="submit"
-                  disabled={!previewUrl}
+                  disabled={!previewUrl || isUploading}
                   className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-md disabled:bg-slate-100 disabled:text-slate-400 hover:bg-blue-700 transition-colors"
                 >
-                  确认保存上传
+                  {isUploading ? '正在上传并识别位置…' : '确认保存上传'}
                 </button>
               </div>
             </form>

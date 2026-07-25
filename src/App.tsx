@@ -233,6 +233,7 @@ export default function App() {
   // Creation overlays
   const [mapEditorRequest, setMapEditorRequest] = useState(0);
   const [mapEditRequest, setMapEditRequest] = useState<{ token: number; place: Place } | null>(null);
+  const [pendingPhotoDraft, setPendingPhotoDraft] = useState<{ token: number; mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string } | null>(null);
 
   // Authentication overlays
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -368,6 +369,17 @@ export default function App() {
     const created = await api.createPlace(place, currentUser?.id);
     setPlaces((current) => [...current, created]);
     setSelectedPlace(created);
+    // A place created while a photo draft is pending links that photo to it.
+    if (pendingPhotoDraft) {
+      const draft = pendingPhotoDraft;
+      setPendingPhotoDraft(null);
+      try {
+        await api.updateMedia(draft.mediaId, { place_id: created.id });
+        setMedia((current) => current.map((item) => item.id === draft.mediaId ? { ...item, place_id: created.id } : item));
+      } catch (error) {
+        console.error('Failed to link photo to the new place', error);
+      }
+    }
     return created;
   };
 
@@ -469,11 +481,13 @@ export default function App() {
 
   const handleCreateVisit = async (visitData: any) => {
     try {
+      // Server marks the place as visited for the current user; do not toggle again.
       const created = await api.createVisit(visitData);
       await reloadAllData();
       return created;
     } catch (e) {
       alert('到访记录打卡失败');
+      throw e;
     }
   };
 
@@ -487,13 +501,21 @@ export default function App() {
   };
 
   // Media
-  const handleUploadMedia = async (data: any) => {
+  const handleUploadMedia = async (data: any): Promise<Media | undefined> => {
     try {
-      await api.uploadMedia(data, currentUser?.id);
+      const created = await api.uploadMedia(data, currentUser?.id);
       await reloadAllData();
+      return created;
     } catch (e) {
-      alert('照片存储失败');
+      alert(e instanceof Error && e.message ? e.message : '照片存储失败');
+      return undefined;
     }
+  };
+
+  const handleCreatePlaceFromPhoto = (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => {
+    setPendingPhotoDraft({ token: Date.now(), ...seed });
+    setSelectedPlace(null);
+    setViewMode('map');
   };
 
   const handleDeleteMedia = async (id: string) => {
@@ -668,6 +690,8 @@ export default function App() {
                 onRequestEditor={requestMapEditor}
                 editorRequest={mapEditorRequest}
                 editRequest={mapEditRequest}
+                photoDraft={pendingPhotoDraft}
+                onPhotoDraftEnd={() => setPendingPhotoDraft(null)}
                 onToggleFavorite={handleToggleFavorite}
                 onAddToTrip={(placeId) => {
                   const p = places.find(item => item.id === placeId);
@@ -750,6 +774,7 @@ export default function App() {
               onDeletePhoto={handleDeleteMedia}
               onToggleFavorite={handleToggleFavoriteMedia}
               onSelectPhoto={(photo) => setMobileSelectedPhoto(photo)}
+              onCreatePlaceFromPhoto={handleCreatePlaceFromPhoto}
             />
           )}
 
@@ -931,22 +956,7 @@ export default function App() {
           tripDays={tripDays}
           activeTrip={activeTrip}
           activeDay={activeDay}
-          onCreateVisit={async (visitData) => {
-            const created = await handleCreateVisit(visitData);
-            if (created && created.place_id) {
-              const p = places.find(item => item.id === created.place_id);
-              if (p && p.status !== 'visited') {
-                await handleToggleVisited(p.id);
-              }
-            }
-            return created;
-          }}
-          onMarkVisited={async (placeId) => {
-            const p = places.find(item => item.id === placeId);
-            if (p && p.status !== 'visited') {
-              await handleToggleVisited(placeId);
-            }
-          }}
+          onCreateVisit={handleCreateVisit}
         />
 
         {/* Add Place To Trip Sheet */}
@@ -1385,6 +1395,8 @@ export default function App() {
                   onDeletePlace={handleDeletePlace}
                   editorRequest={mapEditorRequest}
                   editRequest={mapEditRequest}
+                  photoDraft={pendingPhotoDraft}
+                  onPhotoDraftEnd={() => setPendingPhotoDraft(null)}
                   categoryColors={CATEGORY_COLORS}
                   categoryLabels={CATEGORY_LABELS}
                   categoryIcons={CATEGORY_ICONS}
@@ -1442,13 +1454,14 @@ export default function App() {
 
           {viewMode === 'photos' && (
             <div className="w-full h-full overflow-y-auto bg-white rounded-2xl border border-slate-100 p-6 shadow-sm scrollbar-thin">
-              <PhotosGallery 
+              <PhotosGallery
                 media={media}
                 places={places}
                 trips={trips}
                 onUploadMedia={handleUploadMedia}
                 onDeleteMedia={handleDeleteMedia}
                 onToggleFavoriteMedia={handleToggleFavoriteMedia}
+                onCreatePlaceFromPhoto={handleCreatePlaceFromPhoto}
                 initialSelectedPlaceId={activePhotoPlaceId}
               />
             </div>
