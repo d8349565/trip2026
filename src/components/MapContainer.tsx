@@ -24,6 +24,8 @@ interface MapContainerProps {
   categoryColors: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }>;
   categoryLabels: Record<PlaceCategory, string>;
   categoryIcons: Record<PlaceCategory, React.ReactNode>;
+  /** 搜索栏下方的插槽（如分类条），确保搜索结果在其后展开不被遮挡 */
+  searchSlot?: React.ReactNode;
 }
 
 type AMapLngLat = { getLng: () => number; getLat: () => number };
@@ -38,6 +40,7 @@ type AMapInstance = {
   setZoomAndCenter: (zoom: number, center: [number, number]) => void;
   setCenter: (center: [number, number]) => void;
   on: (event: string, handler: (event: AMapEvent) => void) => void;
+  containerToLngLat: (pixel: { getX?: () => number; getY?: () => number }) => AMapLngLat | null;
 };
 type AMapGlobal = {
   Map: new (container: HTMLDivElement, options: Record<string, unknown>) => AMapInstance;
@@ -121,6 +124,7 @@ export default function MapContainer({
   photoDraft = null,
   onPhotoDraftEnd,
   categoryLabels,
+  searchSlot,
 }: MapContainerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -145,6 +149,17 @@ export default function MapContainer({
   const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number; address?: string; name?: string } | null>(null);
   const myLocMarkerRef = useRef<unknown | undefined>(undefined);
   const initialCenterRef = useRef(mapCenter(places));
+  // 底部提示条：5秒自动消失 + 首次触碰地图后立即消失
+  const [showHint, setShowHint] = useState(true);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    hintTimerRef.current = setTimeout(() => setShowHint(false), 5000);
+    return () => clearTimeout(hintTimerRef.current);
+  }, []);
+  const dismissHint = () => { setShowHint(false); if (hintTimerRef.current) clearTimeout(hintTimerRef.current); };
+  // 长按检测 ref
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const enterPhotoMode = (mediaId: string) => {
     photoModeRef.current = mediaId;
@@ -216,18 +231,53 @@ export default function MapContainer({
         center: initialCenterRef.current,
         zoom: places.length > 1 ? 11 : 13,
         viewMode: '2D',
-        doubleClickZoom: false,
+        doubleClickZoom: true,
         resizeEnable: true,
       });
-      map.on('dblclick', (event) => {
-        if (!event.lnglat) return;
-        startDraftAt(
-          Number(event.lnglat.getLat().toFixed(6)),
-          Number(event.lnglat.getLng().toFixed(6)),
-        );
-      });
+      // PC 端保留双击创建标记；移动端用长按代替
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      if (!isTouchDevice) {
+        map.on('dblclick', (event) => {
+          if (!event.lnglat) return;
+          dismissHint();
+          startDraftAt(
+            Number(event.lnglat.getLat().toFixed(6)),
+            Number(event.lnglat.getLng().toFixed(6)),
+          );
+        });
+      }
       mapRef.current = map;
       setReady(true);
+      // 移动端长按创建标记（600ms，移动超 10px 取消）
+      if (isTouchDevice && containerRef.current) {
+        const el = containerRef.current;
+        el.addEventListener('touchstart', (e) => {
+          if (e.touches.length !== 1) return;
+          const t = e.touches[0];
+          longPressStartRef.current = { x: t.clientX, y: t.clientY };
+          longPressTimerRef.current = setTimeout(() => {
+            longPressTimerRef.current = undefined;
+            // 触发长按：用 touch 坐标转地图经纬度
+            const pixel = new (window as any).AMap.Pixel(t.clientX - el.getBoundingClientRect().left, t.clientY - el.getBoundingClientRect().top);
+            const lnglat = map.containerToLngLat(pixel);
+            if (lnglat) {
+              dismissHint();
+              startDraftAt(Number(lnglat.getLat().toFixed(6)), Number(lnglat.getLng().toFixed(6)));
+            }
+          }, 600);
+        }, { passive: true });
+        el.addEventListener('touchmove', (e) => {
+          if (!longPressTimerRef.current || !longPressStartRef.current || e.touches.length !== 1) return;
+          const t = e.touches[0];
+          const dx = t.clientX - longPressStartRef.current.x;
+          const dy = t.clientY - longPressStartRef.current.y;
+          if (dx * dx + dy * dy > 100) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = undefined; }
+        }, { passive: true });
+        el.addEventListener('touchend', () => {
+          if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = undefined; }
+          longPressStartRef.current = null;
+        }, { passive: true });
+      }
       // 先恢复上次记住的位置（立即显示蓝点，无需等待授权），再尝试刷新到最新位置
       const saved = (() => {
         try { return JSON.parse(localStorage.getItem(MY_LOCATION_KEY) ?? 'null'); } catch { return null; }
@@ -562,6 +612,8 @@ export default function MapContainer({
           <button type="button" onClick={() => { setMessage('请在地图目标位置双击，随后可拖动蓝色标记微调。'); searchInputRef.current?.blur(); }} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100" title="手动地图选点"><MapPin size={16} /></button>
         </div>
 
+        {searchSlot && <div className="mt-1.5" onClick={(event) => event.stopPropagation()}>{searchSlot}</div>}
+
         {pois.length > 0 && <div data-testid="map-poi-results" className="mt-2 max-h-64 overflow-y-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-xl">
           {pois.map((poi) => <button key={poi.id} type="button" onClick={() => choosePoi(poi)} className="flex w-full items-start gap-2 rounded-xl p-2.5 text-left hover:bg-blue-50">
             <MapPin size={15} className="mt-0.5 shrink-0 text-blue-500" />
@@ -620,11 +672,14 @@ export default function MapContainer({
         </div>
       )}
 
-      {!draft && message && <div data-testid="map-message" className="absolute bottom-4 left-3 z-30 flex max-w-sm items-center gap-2 rounded-xl border border-slate-100 bg-white/95 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow-md">
-        <span>{message}</span>
+      {!draft && message && <div data-testid="map-message" className="absolute bottom-4 left-3 right-3 z-30 flex max-w-sm items-center gap-2 rounded-xl border border-slate-100 bg-white/95 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow-md">
+        <span className="truncate">{message}</span>
         {photoMode && <button type="button" data-testid="photo-draft-cancel" onClick={() => { endPhotoMode(); setMessage(''); }} className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 font-bold text-slate-500 hover:bg-slate-50">不关联照片</button>}
       </div>}
-      {!draft && !message && <div className="absolute bottom-4 left-3 right-3 z-30 rounded-xl border border-slate-100 bg-white/90 px-3 py-2 text-[10px] font-semibold text-slate-500 shadow-md truncate">双击选点 · 点击标记查看详情 · 长按管理</div>}
+      {!draft && !message && showHint && <div className="absolute bottom-4 left-3 right-3 z-30 flex items-center gap-2 rounded-xl border border-slate-100 bg-white/90 px-3 py-2 text-[10px] font-semibold text-slate-500 shadow-md backdrop-blur-sm transition-opacity duration-300">
+        <span className="truncate flex-1">点击标记查看详情 · 长按创建新标记</span>
+        <button type="button" onClick={dismissHint} className="shrink-0 rounded-md p-0.5 text-slate-400 hover:text-slate-600"><X size={12} /></button>
+      </div>}
     </div>
   );
 }

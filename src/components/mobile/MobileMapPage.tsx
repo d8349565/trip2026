@@ -96,41 +96,6 @@ export default function MobileMapPage({
 
   return (
     <div className="flex-1 h-full w-full relative flex flex-col overflow-hidden select-none">
-      
-      {/* 2. Streamlined Category Selector Bar */}
-      <div className="absolute top-18 inset-x-3 z-30 flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
-        {hotCategories.map(cat => {
-          const isActive = activeCategory === cat.key;
-          return (
-            <button
-              key={cat.key}
-              id={`m_cat_${cat.key || 'all'}`}
-              onClick={() => {
-                setActiveCategory(cat.key);
-                onSelectPlace(null);
-              }}
-              className={`px-3.5 py-2.5 rounded-xl text-xs font-black whitespace-nowrap border transition-all flex items-center gap-1 shadow-sm shrink-0 outline-none ${
-                isActive
-                  ? 'bg-blue-600 border-blue-600 text-white font-extrabold shadow-blue-500/10'
-                  : 'bg-white/95 backdrop-blur-md border-slate-100 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <span className="flex items-center">{cat.icon}</span>
-              <span>{cat.label}</span>
-            </button>
-          );
-        })}
-
-        {/* More Categories */}
-        <button
-          id="m_cat_more"
-          onClick={() => setShowFilterSheet(true)}
-          className={`px-3.5 py-2.5 rounded-xl text-xs font-black whitespace-nowrap border transition-all flex items-center gap-1 shadow-sm bg-white/95 backdrop-blur-md border-slate-100 text-slate-600 outline-none shrink-0`}
-        >
-          <Sparkles size={13} />
-          <span>筛选</span>
-        </button>
-      </div>
 
       {/* 3. Fullscreen Map View */}
       <div className="absolute inset-0 z-10 w-full h-full">
@@ -148,6 +113,36 @@ export default function MobileMapPage({
           categoryColors={categoryColors}
           categoryLabels={categoryLabels}
           categoryIcons={categoryIcons}
+          searchSlot={
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5" onClick={(e) => e.stopPropagation()}>
+              {hotCategories.map(cat => {
+                const isActive = activeCategory === cat.key;
+                return (
+                  <button
+                    key={cat.key}
+                    id={`m_cat_${cat.key || 'all'}`}
+                    onClick={() => { setActiveCategory(cat.key); onSelectPlace(null); }}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap border transition-all flex items-center gap-1 shrink-0 outline-none ${
+                      isActive
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                        : 'bg-white/90 border-slate-100 text-slate-500'
+                    }`}
+                  >
+                    <span className="flex items-center">{cat.icon}</span>
+                    <span>{cat.label}</span>
+                  </button>
+                );
+              })}
+              <button
+                id="m_cat_more"
+                onClick={() => setShowFilterSheet(true)}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap border border-slate-100 bg-white/90 text-slate-500 outline-none shrink-0 flex items-center gap-1"
+              >
+                <Sparkles size={12} />
+                <span>筛选</span>
+              </button>
+            </div>
+          }
         />
       </div>
 
