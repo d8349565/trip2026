@@ -21,6 +21,7 @@ interface PhotosGalleryProps {
   onDeleteMedia: (id: string) => void;
   onToggleFavoriteMedia: (id: string, fav: boolean) => void;
   onCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => void;
+  onAutoCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => void;
   initialSelectedPlaceId?: string | null;
 }
 
@@ -32,6 +33,7 @@ export default function PhotosGallery({
   onDeleteMedia,
   onToggleFavoriteMedia,
   onCreatePlaceFromPhoto,
+  onAutoCreatePlaceFromPhoto,
   initialSelectedPlaceId
 }: PhotosGalleryProps) {
   const [selectedPlaceId, setSelectedPlaceId] = useState(initialSelectedPlaceId || '');
@@ -178,7 +180,7 @@ export default function PhotosGallery({
         lng: pendingExif.longitude
       });
 
-      // Offer marker creation when the photo was uploaded without a place.
+      // 上传后未手动关联地点：有 GPS 就自动建标记，无 GPS 才引导手动选点。
       if (created && !uploadPlaceId) {
         if (Number.isFinite(created.display_latitude) && Number.isFinite(created.display_longitude)) {
           let address = '';
@@ -188,15 +190,14 @@ export default function PhotosGallery({
             address = location.address;
             name = location.name;
           } catch {
-            // Coordinates are still usable; the form can reverse-geocode again.
+            // 坐标仍可用，自动建点时名称会回退为「照片拍摄点」。
           }
-          setPhotoPrompt({
+          onAutoCreatePlaceFromPhoto({
             mediaId: created.id,
             latitude: created.display_latitude,
             longitude: created.display_longitude,
             name,
             address,
-            recognized: true
           });
         } else {
           setPhotoPrompt({ mediaId: created.id, recognized: false });

@@ -281,6 +281,12 @@ export default function MapContainer({
         position: [place.longitude, place.latitude], content, anchor: 'bottom-center', offset: [0, 10],
         zIndex: selected ? 200 : 100,
       });
+      // AMap 2.0 overlay 层可能吞掉自定义 content 上的 DOM click，
+      // 用原生 marker 事件兜底确保点击一定触发。
+      marker.on('click', () => {
+        setContextMenu(null);
+        onSelectPlace(place);
+      });
       map.add(marker);
       return marker;
     });

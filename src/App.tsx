@@ -518,6 +518,34 @@ export default function App() {
     setViewMode('map');
   };
 
+  // 照片带 GPS 时：直接自动建一个地点标记并关联照片，不再要求用户手动确认。
+  const handleAutoCreatePlaceFromPhoto = async (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => {
+    if (!Number.isFinite(seed.latitude) || !Number.isFinite(seed.longitude)) return;
+    try {
+      const created = await api.createPlace({
+        name: seed.name?.trim() || seed.address?.trim() || '照片拍摄点',
+        category_id: 'scenic',
+        latitude: seed.latitude,
+        longitude: seed.longitude,
+        coordinate_system: 'GCJ02',
+        address: seed.address ?? '',
+        visibility: 'shared',
+        status: 'visited',
+        favorite: false,
+        recommended: false,
+      }, currentUser?.id);
+      setPlaces((current) => [...current, created]);
+      setSelectedPlace(created);
+      await api.updateMedia(seed.mediaId, { place_id: created.id });
+      setMedia((current) => current.map((item) => item.id === seed.mediaId ? { ...item, place_id: created.id } : item));
+      setViewMode('map');
+    } catch (error) {
+      console.error('自动创建照片地点失败', error);
+      // 兜底：自动建点失败时退回手动流程
+      handleCreatePlaceFromPhoto(seed);
+    }
+  };
+
   const handleDeleteMedia = async (id: string) => {
     if (confirm('确认永久删除这张照片吗？此操作会同步清除本地存储文件。')) {
       try {
@@ -775,6 +803,7 @@ export default function App() {
               onToggleFavorite={handleToggleFavoriteMedia}
               onSelectPhoto={(photo) => setMobileSelectedPhoto(photo)}
               onCreatePlaceFromPhoto={handleCreatePlaceFromPhoto}
+              onAutoCreatePlaceFromPhoto={handleAutoCreatePlaceFromPhoto}
             />
           )}
 
@@ -1462,6 +1491,7 @@ export default function App() {
                 onDeleteMedia={handleDeleteMedia}
                 onToggleFavoriteMedia={handleToggleFavoriteMedia}
                 onCreatePlaceFromPhoto={handleCreatePlaceFromPhoto}
+                onAutoCreatePlaceFromPhoto={handleAutoCreatePlaceFromPhoto}
                 initialSelectedPlaceId={activePhotoPlaceId}
               />
             </div>

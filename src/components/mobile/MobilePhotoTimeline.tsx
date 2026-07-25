@@ -12,6 +12,7 @@ interface MobilePhotoTimelineProps {
   onToggleFavorite: (id: string, fav: boolean) => void;
   onSelectPhoto: (photo: Media) => void;
   onCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => void;
+  onAutoCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => void;
 }
 
 export default function MobilePhotoTimeline({
@@ -22,6 +23,7 @@ export default function MobilePhotoTimeline({
   onToggleFavorite,
   onSelectPhoto,
   onCreatePlaceFromPhoto,
+  onAutoCreatePlaceFromPhoto,
 }: MobilePhotoTimelineProps) {
   const [viewMode, setViewMode] = useState<'timeline' | 'grid'>('timeline');
   const [uploadPlaceId, setUploadPlaceId] = useState('');
@@ -72,7 +74,7 @@ export default function MobilePhotoTimeline({
         lng: prepared.exif.longitude
       });
 
-      // Offer marker creation when the photo was uploaded without a place.
+      // 上传后未手动关联地点：有 GPS 就自动建标记，无 GPS 才引导手动选点。
       if (created && !uploadPlaceId) {
         if (Number.isFinite(created.display_latitude) && Number.isFinite(created.display_longitude)) {
           let address = '';
@@ -82,9 +84,9 @@ export default function MobilePhotoTimeline({
             address = location.address;
             name = location.name;
           } catch {
-            // Coordinates are still usable; the map form can reverse-geocode again.
+            // 坐标仍可用，自动建点时名称会回退为「照片拍摄点」。
           }
-          setPhotoPrompt({ mediaId: created.id, latitude: created.display_latitude, longitude: created.display_longitude, name, address, recognized: true });
+          onAutoCreatePlaceFromPhoto({ mediaId: created.id, latitude: created.display_latitude, longitude: created.display_longitude, name, address });
         } else {
           setPhotoPrompt({ mediaId: created.id, recognized: false });
         }
