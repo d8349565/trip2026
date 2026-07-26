@@ -151,15 +151,6 @@ export default function MobileMapPage({
               </button>
 
               <button
-                id="m_btn_locate"
-                onClick={() => setLocateRequest(Date.now())}
-                className="px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border border-white/50 bg-white/70 text-blue-600 backdrop-blur-sm outline-none shrink-0 flex items-center gap-1.5 shadow-sm hover:bg-white/90 active:scale-[0.96] transition-all duration-200"
-              >
-                <Crosshair size={13} />
-                <span>定位</span>
-              </button>
-
-              <button
                 id="m_btn_add_place"
                 onClick={onRequestEditor}
                 className="px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border border-transparent bg-gradient-to-b from-blue-500 to-blue-600 text-white outline-none shrink-0 flex items-center gap-1.5 shadow-md shadow-blue-500/25 active:scale-[0.96] transition-all duration-200"
@@ -172,7 +163,19 @@ export default function MobileMapPage({
         />
       </div>
 
-      {/* 4. No floating map controls — actions live in the category bar above */}
+      {/* 4. Current location is an independent primary map control. */}
+      {!showListView && (
+        <button
+          id="m_btn_locate"
+          type="button"
+          onClick={() => setLocateRequest(Date.now())}
+          aria-label="定位到当前位置"
+          className="absolute right-3 top-28 z-30 flex min-h-11 items-center gap-2 rounded-2xl border border-blue-100 bg-white/95 px-3.5 text-xs font-bold text-blue-600 shadow-lg backdrop-blur-md outline-none transition-colors duration-200 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-400 active:bg-blue-100"
+        >
+          <Crosshair size={17} />
+          <span>当前位置</span>
+        </button>
+      )}
 
       {/* 5. Miniature Place Card (when place is selected) */}
       {selectedPlace && (

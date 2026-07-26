@@ -69,6 +69,12 @@ type AMapInstance = {
   setZoom: (zoom: number) => void;
   setZoomAndCenter: (zoom: number, center: [number, number]) => void;
   setCenter: (center: [number, number]) => void;
+  setFitView: (
+    overlays?: unknown[],
+    immediately?: boolean,
+    avoid?: [number, number, number, number],
+    maxZoom?: number,
+  ) => void;
   on: (event: string, handler: (event: AMapEvent) => void) => void;
   containerToLngLat: (pixel: { getX?: () => number; getY?: () => number }) => AMapLngLat | null;
 };
@@ -199,6 +205,7 @@ export default function MapContainer({
   const [existingQuery, setExistingQuery] = useState('');
   const [myLocation, setMyLocation] = useState<MyLocationState | null>(null);
   const myLocMarkerRef = useRef<unknown | undefined>(undefined);
+  const initialFitDoneRef = useRef(false);
   const initialCenterRef = useRef(mapCenter(places));
   // 手势模式按“主指针”判定：触屏笔记本的主指针仍是鼠标(fine)，应走 PC 双击建点；
   // 只看 ontouchstart/maxTouchPoints 会把触屏 PC 误判成移动端，导致双击无法新增。
@@ -216,6 +223,18 @@ export default function MapContainer({
   // Track whether the draft name was auto-filled by the system (POI search / reverse geocode)
   // vs. manually typed by the user. Only auto-filled names get overwritten on marker drag.
   const nameAutoFilledRef = useRef(true);
+
+  const fitAllPlaces = () => {
+    const map = mapRef.current;
+    if (!map || markersRef.current.length === 0) return;
+    const mobile = (rootRef.current?.clientWidth ?? 0) < 640;
+    map.setFitView(
+      markersRef.current,
+      false,
+      mobile ? [150, 36, 120, 36] : [72, 72, 72, 72],
+      15,
+    );
+  };
 
   const enterPhotoMode = (mediaId: string) => {
     photoModeRef.current = mediaId;
@@ -385,7 +404,7 @@ export default function MapContainer({
         if (saved && isRecent
           && (saved.source === 'browser' || saved.source === 'manual')
           && Number.isFinite(saved.latitude) && Number.isFinite(saved.longitude)) {
-          applyMyLocation(saved as MyLocationState, 15, false);
+          applyMyLocation(saved as MyLocationState, undefined, false);
           void refreshMyLocationAddress(saved.latitude, saved.longitude);
         }
       }
@@ -451,6 +470,10 @@ export default function MapContainer({
       map.add(marker);
       return marker;
     });
+    if (!initialFitDoneRef.current && markersRef.current.length > 0) {
+      initialFitDoneRef.current = true;
+      requestAnimationFrame(fitAllPlaces);
+    }
     return () => {
       if (markersRef.current.length && mapRef.current) mapRef.current.remove(markersRef.current);
       markersRef.current = [];
@@ -797,7 +820,7 @@ export default function MapContainer({
     if (field === 'name') nameAutoFilledRef.current = false;
     setDraft((current) => current ? { ...current, [field]: value } : current);
   };
-  const inputClass = 'w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs outline-none focus:border-blue-400';
+  const inputClass = 'w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-base outline-none focus:border-blue-400 sm:text-xs';
 
   return (
     <div ref={rootRef} className="relative h-full w-full overflow-hidden rounded-2xl border border-slate-100 bg-slate-100" onClick={() => setContextMenu(null)}>
@@ -835,7 +858,7 @@ export default function MapContainer({
       <div className="absolute right-3 top-3 z-30 flex flex-col gap-2 max-sm:hidden">
         <button onClick={() => mapRef.current?.setZoom(Math.min(20, (mapRef.current?.getZoom() ?? 12) + 1))} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="放大"><Plus size={18} /></button>
         <button onClick={() => mapRef.current?.setZoom(Math.max(3, (mapRef.current?.getZoom() ?? 12) - 1))} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="缩小"><Minus size={18} /></button>
-        <button onClick={() => mapRef.current?.setZoomAndCenter(places.length > 1 ? 11 : 13, mapCenter(places))} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="显示全部地点"><LocateFixed size={18} /></button>
+        <button onClick={fitAllPlaces} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="显示全部地点"><LocateFixed size={18} /></button>
         <button onClick={() => void locateAndCenter()} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="定位到当前位置"><Crosshair size={18} /></button>
       </div>
 
@@ -845,27 +868,28 @@ export default function MapContainer({
         <button onClick={() => void deletePlace(contextMenu.place)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-bold text-red-600 hover:bg-red-50"><Trash2 size={14} />删除地点</button>
       </div>}
 
-      {draft && <form data-testid="map-place-editor" onSubmit={savePlace} onClick={(event) => event.stopPropagation()} className={`absolute left-3 right-3 z-40 overflow-hidden rounded-2xl border border-slate-100 bg-white/98 shadow-2xl backdrop-blur-md transition-all duration-300 ${draftExpanded ? 'bottom-3 max-h-[70vh] overflow-y-auto p-4' : 'bottom-3 p-3'}`}>
+      {draft && <form data-testid="map-place-editor" onSubmit={savePlace} onClick={(event) => event.stopPropagation()} className={`absolute left-3 right-3 z-40 overflow-hidden rounded-2xl border border-slate-100 bg-white/98 shadow-2xl backdrop-blur-md transition-all duration-300 ${draftExpanded ? 'bottom-3 max-h-[70vh] overflow-y-auto p-4 max-sm:bottom-auto max-sm:top-[18%] max-sm:max-h-[64vh]' : 'bottom-3 p-3 max-sm:bottom-auto max-sm:top-[38%]'}`}>
         {/* 收起态：一行紧凑操作栏，地图全露 */}
         {!draftExpanded ? (
           <div className="flex items-center gap-2">
-            <input required value={draft.name ?? ''} onChange={(event) => updateDraft('name', event.target.value)} placeholder="地点名称" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs outline-none focus:border-blue-400" />
-            <button type="button" onClick={() => setDraftExpanded(true)} className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-200">展开</button>
-            <button disabled={busy} type="submit" className="shrink-0 flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"><Check size={13} />保存</button>
+            <input aria-label="地点名称" required value={draft.name ?? ''} onChange={(event) => updateDraft('name', event.target.value)} placeholder="地点名称" className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-base outline-none focus:border-blue-400 sm:min-h-0 sm:text-xs" />
+            <button type="button" onClick={() => setDraftExpanded(true)} className="min-h-11 shrink-0 rounded-lg bg-slate-100 px-2.5 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-200 sm:min-h-0">填写</button>
+            <button disabled={busy} type="submit" className="flex min-h-11 shrink-0 items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50 sm:min-h-0"><Check size={13} />保存</button>
             {editingId && <button type="button" onClick={() => void deletePlace({ id: editingId, name: draft.name ?? '' })} title="删除地点" className="shrink-0 rounded-lg bg-red-50 p-2 text-red-500 hover:bg-red-100 active:scale-95 transition-all"><Trash2 size={14} /></button>}
-            <button type="button" onClick={() => { setDraft(null); setEditingId(null); setMessage(''); endPhotoMode(); }} className="shrink-0 rounded-lg bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"><X size={14} /></button>
+            <button aria-label="取消地点录入" type="button" onClick={() => { setDraft(null); setEditingId(null); setMessage(''); endPhotoMode(); }} className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 sm:min-h-0 sm:min-w-0"><X size={14} /></button>
           </div>
         ) : (
           <>
-        <div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-800">{editingId ? '编辑地点' : '确认地图标记'}</h3><p className="mt-0.5 text-[10px] text-blue-600">拖动地图上的蓝色标记可调整坐标</p></div><div className="flex items-center gap-1.5"><button type="button" onClick={() => setDraftExpanded(false)} className="rounded-full bg-slate-100 px-2.5 py-1.5 text-[10px] font-bold text-slate-500 hover:bg-slate-200">收起</button><button type="button" onClick={() => { setDraft(null); setEditingId(null); setDraftExpanded(false); setMessage(''); endPhotoMode(); }} className="rounded-full bg-slate-100 p-2 text-slate-500"><X size={15} /></button></div></div>
+        <div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-black text-slate-800">{editingId ? '编辑地点' : '确认地图标记'}</h3><p className="mt-0.5 text-[10px] text-blue-600">{editingId ? '修改地点资料，拖动蓝色标记可调整坐标' : '先保存基本信息，详细资料可稍后编辑'}</p></div><div className="flex items-center gap-1.5"><button type="button" onClick={() => setDraftExpanded(false)} className="min-h-11 rounded-full bg-slate-100 px-3 text-[10px] font-bold text-slate-500 hover:bg-slate-200 sm:min-h-0 sm:px-2.5 sm:py-1.5">收起</button><button aria-label="取消地点录入" type="button" onClick={() => { setDraft(null); setEditingId(null); setDraftExpanded(false); setMessage(''); endPhotoMode(); }} className="flex min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-100 p-2 text-slate-500 sm:min-h-0 sm:min-w-0"><X size={15} /></button></div></div>
         <div className="grid grid-cols-2 gap-2">
           <label className="col-span-2"><span className="mb-1 block text-[10px] font-bold text-slate-400">地点名称</span><input required value={draft.name ?? ''} onChange={(event) => updateDraft('name', event.target.value)} className={inputClass} /></label>
-          <label><span className="mb-1 block text-[10px] font-bold text-slate-400">分类</span><select value={draft.category_id} onChange={(event) => updateDraft('category_id', event.target.value)} className={inputClass}>{(Object.keys(categoryLabels) as PlaceCategory[]).map((category) => <option key={category} value={category}>{categoryLabels[category]}</option>)}</select></label>
-          <label><span className="mb-1 block text-[10px] font-bold text-slate-400">门票</span><input value={draft.ticket_price ?? ''} onChange={(event) => updateDraft('ticket_price', event.target.value)} placeholder="如：80元" className={inputClass} /></label>
+          <label className={editingId ? '' : 'col-span-2'}><span className="mb-1 block text-[10px] font-bold text-slate-400">分类</span><select value={draft.category_id} onChange={(event) => updateDraft('category_id', event.target.value)} className={inputClass}>{(Object.keys(categoryLabels) as PlaceCategory[]).map((category) => <option key={category} value={category}>{categoryLabels[category]}</option>)}</select></label>
+          {editingId && <label><span className="mb-1 block text-[10px] font-bold text-slate-400">门票</span><input value={draft.ticket_price ?? ''} onChange={(event) => updateDraft('ticket_price', event.target.value)} placeholder="如：80元" className={inputClass} /></label>}
           <label className="col-span-2"><span className="mb-1 block text-[10px] font-bold text-slate-400">地址</span><input value={draft.address ?? ''} onChange={(event) => updateDraft('address', event.target.value)} className={inputClass} /></label>
-          <label><span className="mb-1 block text-[10px] font-bold text-slate-400">纬度</span><input type="number" step="any" required value={draft.latitude ?? ''} onChange={(event) => void reversePosition(Number(event.target.value), Number(draft.longitude))} className={`${inputClass} font-mono`} /></label>
-          <label><span className="mb-1 block text-[10px] font-bold text-slate-400">经度</span><input type="number" step="any" required value={draft.longitude ?? ''} onChange={(event) => void reversePosition(Number(draft.latitude), Number(event.target.value))} className={`${inputClass} font-mono`} /></label>
           <label className="col-span-2"><span className="mb-1 block text-[10px] font-bold text-slate-400">概览 / 核心亮点</span><textarea value={draft.summary ?? ''} onChange={(event) => updateDraft('summary', event.target.value)} rows={2} className={inputClass} /></label>
+          {editingId && <>
+          <label className="col-span-2"><span className="mb-1 block text-[10px] font-bold text-slate-400">纬度</span><input type="number" step="any" required value={draft.latitude ?? ''} onChange={(event) => void reversePosition(Number(event.target.value), Number(draft.longitude))} className={`${inputClass} font-mono`} /></label>
+          <label className="col-span-2"><span className="mb-1 block text-[10px] font-bold text-slate-400">经度</span><input type="number" step="any" required value={draft.longitude ?? ''} onChange={(event) => void reversePosition(Number(draft.latitude), Number(event.target.value))} className={`${inputClass} font-mono`} /></label>
           <label className="col-span-2"><span className="mb-1 block text-[10px] font-bold text-slate-400">推荐玩法与路线</span><textarea value={draft.overview_route ?? ''} onChange={(event) => updateDraft('overview_route', event.target.value)} rows={2} className={inputClass} /></label>
           <label className="col-span-2"><span className="mb-1 block text-[10px] font-bold text-slate-400">游玩提示</span><textarea value={draft.overview_tips ?? ''} onChange={(event) => updateDraft('overview_tips', event.target.value)} rows={2} className={inputClass} /></label>
           <label className="col-span-2"><span className="mb-1 block text-[10px] font-bold text-slate-400">安全与避坑</span><textarea value={draft.safety_notes ?? ''} onChange={(event) => updateDraft('safety_notes', event.target.value)} rows={2} className={inputClass} /></label>
@@ -874,6 +898,7 @@ export default function MapContainer({
           <label><span className="mb-1 block text-[10px] font-bold text-slate-400">最佳季节</span><input value={draft.best_season ?? ''} onChange={(event) => updateDraft('best_season', event.target.value)} className={inputClass} /></label>
           <label><span className="mb-1 block text-[10px] font-bold text-slate-400">建议时长</span><input value={draft.suggested_duration ?? ''} onChange={(event) => updateDraft('suggested_duration', event.target.value)} className={inputClass} /></label>
           <label className="col-span-2 flex items-center gap-4 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600"><span><input type="checkbox" checked={Boolean(draft.has_parking)} onChange={(event) => updateDraft('has_parking', event.target.checked)} className="mr-1.5" />有停车条件</span><span><input type="checkbox" checked={Boolean(draft.recommended)} onChange={(event) => updateDraft('recommended', event.target.checked)} className="mr-1.5" />重点推荐</span></label>
+          </>}
         </div>
         {message && <p className="mt-2 text-[10px] font-semibold text-amber-600">{message}</p>}
         <button disabled={busy} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-3 text-xs font-bold text-white disabled:opacity-50"><Check size={15} />{editingId ? '保存修改' : '保存并生成标记'}</button>
