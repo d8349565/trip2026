@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { createGpsExifJpeg } from './fixtures/exifJpeg';
 
 const dataPath = fs.mkdtempSync(path.join(os.tmpdir(), 'travel-footprint-server-'));
 process.env.NODE_ENV = 'test';
@@ -126,6 +127,21 @@ test('health, authentication, session rotation, and API guards work', async (con
   assert.equal(sharedPlace.rating, undefined);
   assert.equal(sharedPlace.cover_image, undefined);
 
+  const adminMapMarkers = await fetch(
+    `${baseUrl}/api/map/markers?west=116&south=23&east=116.5&north=23.5`,
+    { headers: { Cookie: loginCookie } },
+  ).then((response) => response.json());
+  assert.equal(adminMapMarkers.total, 2);
+  assert.equal(adminMapMarkers.truncated, false);
+  assert.deepEqual(
+    adminMapMarkers.markers.map((marker: { name: string }) => marker.name).sort(),
+    ['Admin private place', 'Admin shared place'],
+  );
+  assert.deepEqual(
+    Object.keys(adminMapMarkers.markers[0]).sort(),
+    ['category_id', 'favorite', 'id', 'latitude', 'longitude', 'name', 'photo_count', 'status'].sort(),
+  );
+
   const registrationResponse = await fetch(`${baseUrl}/api/auth/register-by-invite`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -137,6 +153,11 @@ test('health, authentication, session rotation, and API guards work', async (con
 
   const memberPlaces = await fetch(`${baseUrl}/api/places`, { headers: { Cookie: memberCookie } }).then((response) => response.json());
   assert.equal(memberPlaces.some((place: { id: string }) => place.id === privatePlace.id), false);
+  const memberMapMarkers = await fetch(`${baseUrl}/api/map/markers`, {
+    headers: { Cookie: memberCookie },
+  }).then((response) => response.json());
+  assert.equal(memberMapMarkers.markers.some((marker: { id: string }) => marker.id === privatePlace.id), false);
+  assert.equal(memberMapMarkers.markers.some((marker: { id: string }) => marker.id === sharedPlace.id), true);
   assert.equal((await fetch(`${baseUrl}/api/places/${sharedPlace.id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', Cookie: memberCookie },
@@ -243,6 +264,23 @@ test('health, authentication, session rotation, and API guards work', async (con
   assert.equal(uploadedMedia.source_latitude, 30.2741);
   assert.equal(uploadedMedia.exif_latitude, undefined);
   assert.notEqual(uploadedMedia.display_longitude, 120.1551);
+
+  const metadataProbeResponse = await fetch(`${baseUrl}/api/media/metadata`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'image/jpeg',
+      'X-Photo-Filename': encodeURIComponent('xiaomi-original.jpg'),
+      Cookie: loginCookie,
+    },
+    body: createGpsExifJpeg(),
+  });
+  assert.equal(metadataProbeResponse.status, 200);
+  const metadataProbe = await metadataProbeResponse.json();
+  assert.equal(metadataProbe.status, 'found');
+  assert.equal(metadataProbe.parser, 'server-exifr');
+  assert.equal(metadataProbe.source, 'exif');
+  assert.ok(Math.abs(metadataProbe.latitude - 30.2666666667) < 1e-8);
+  assert.ok(Math.abs(metadataProbe.longitude - 120.155) < 1e-8);
 
   const invalidMediaLocationResponse = await fetch(`${baseUrl}/api/media/upload`, {
     method: 'POST',

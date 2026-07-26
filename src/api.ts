@@ -3,7 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Place, Trip, Guide, Checklist, Media, User, InviteCode, type MediaUploadInput } from './types';
+import {
+  Place,
+  Trip,
+  Guide,
+  Checklist,
+  Media,
+  User,
+  InviteCode,
+  type MediaUploadInput,
+  type MapMarkerSummary,
+  type PhotoMetadataProbeResult,
+} from './types';
 
 const API_BASE = '';
 
@@ -154,6 +165,19 @@ export const api = {
     body: JSON.stringify({ url }),
   }),
 
+  getMapMarkers: async (bounds?: {
+    west: number;
+    south: number;
+    east: number;
+    north: number;
+  }): Promise<{ markers: MapMarkerSummary[]; total: number; truncated: boolean }> => {
+    const params = new URLSearchParams();
+    if (bounds) {
+      for (const [key, value] of Object.entries(bounds)) params.set(key, String(value));
+    }
+    return request(`/api/map/markers${params.size ? `?${params}` : ''}`);
+  },
+
   // Places
   getPlaces: async (filters: { category?: string; status?: string; search?: string; favorite?: boolean } = {}): Promise<Place[]> => {
     const params = new URLSearchParams();
@@ -300,6 +324,21 @@ export const api = {
     if (params.place_id) q.append('place_id', params.place_id);
     if (params.trip_id) q.append('trip_id', params.trip_id);
     const res = await fetch(`${API_BASE}/api/media?${q.toString()}`);
+    return res.json();
+  },
+
+  probePhotoMetadata: async (file: File): Promise<PhotoMetadataProbeResult> => {
+    const res = await fetch(`${API_BASE}/api/media/metadata`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'X-Photo-Filename': encodeURIComponent(file.name),
+      },
+      body: file,
+    });
+    if (!res.ok) {
+      throw new ApiError('照片元数据服务端解析失败', res.status);
+    }
     return res.json();
   },
 

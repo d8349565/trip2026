@@ -41,6 +41,9 @@ test('migrations and legacy import are idempotent and transactional', (context) 
     location_observed_at: '2026-07-26T08:00:00.000Z',
     display_latitude: 30.2717,
     display_longitude: 120.1596,
+    metadata_status: 'not_found',
+    metadata_parser: 'server-exifr',
+    metadata_error_code: 'GPS_METADATA_NOT_FOUND',
     favorite: false,
     visibility: 'private',
     created_at: '2026-07-26T08:00:01.000Z',
@@ -50,6 +53,9 @@ test('migrations and legacy import are idempotent and transactional', (context) 
   assert.equal(storedMedia.location_source, 'browser');
   assert.equal(storedMedia.location_accuracy_m, 18);
   assert.equal(storedMedia.exif_latitude ?? undefined, undefined);
+  assert.equal(storedMedia.metadata_status, 'not_found');
+  assert.equal(storedMedia.metadata_parser, 'server-exifr');
+  assert.equal(storedMedia.metadata_error_code, 'GPS_METADATA_NOT_FOUND');
 
   const invalid = structuredClone(withMedia);
   invalid.trips.push({

@@ -8,6 +8,7 @@
 
 import exifr from 'exifr';
 import type { BrowserLocationFailureReason } from './browserLocation';
+import type { PhotoMetadataParser, PhotoMetadataStatus } from '../types';
 
 export interface PhotoExif {
   latitude?: number;
@@ -17,6 +18,9 @@ export interface PhotoExif {
   accuracyM?: number;
   observedAt?: string;
   locationFailure?: BrowserLocationFailureReason;
+  metadataStatus?: PhotoMetadataStatus;
+  metadataParser?: PhotoMetadataParser;
+  metadataErrorCode?: string;
 }
 
 function isValidGps(gps: { latitude?: number; longitude?: number } | undefined | null): gps is { latitude: number; longitude: number } {
@@ -36,10 +40,12 @@ function isValidGps(gps: { latitude?: number; longitude?: number } | undefined |
  */
 export async function readPhotoExif(file: File): Promise<PhotoExif> {
   const result: PhotoExif = {};
+  let parseSucceeded = false;
 
   // 策略 1：exifr.gps() 快捷方法（PC 端标准 JPEG 走这里最快）
   try {
     const gps = await exifr.gps(file);
+    parseSucceeded = true;
     if (isValidGps(gps)) {
       result.latitude = gps.latitude;
       result.longitude = gps.longitude;
@@ -65,6 +71,7 @@ export async function readPhotoExif(file: File): Promise<PhotoExif> {
         // 关键：覆盖 gpsOnlyOptions 的 40KB 限制，读取完整元数据
         firstChunkSize: 1024 * 1024,
       });
+      parseSucceeded = true;
 
       // 检查 gps 子对象（标准 EXIF GPS IFD）
       const gps = parsed?.gps;
@@ -105,6 +112,7 @@ export async function readPhotoExif(file: File): Promise<PhotoExif> {
   if (!result.capturedAt) {
     try {
       const dates = await exifr.parse(file, ['DateTimeOriginal', 'CreateDate', 'ModifyDate']);
+      parseSucceeded = true;
       const value = dates?.DateTimeOriginal ?? dates?.CreateDate ?? dates?.ModifyDate;
       const date = value instanceof Date ? value : typeof value === 'string' ? new Date(value) : undefined;
       if (date && !Number.isNaN(date.getTime())) result.capturedAt = date.toISOString();
@@ -112,6 +120,13 @@ export async function readPhotoExif(file: File): Promise<PhotoExif> {
       // No readable capture time — keep the user-provided date.
     }
   }
+
+  result.metadataStatus = result.latitude !== undefined
+    ? 'found'
+    : parseSucceeded ? 'not_found' : 'parse_error';
+  result.metadataParser = 'client-exifr';
+  if (result.metadataStatus === 'not_found') result.metadataErrorCode = 'GPS_METADATA_NOT_FOUND';
+  if (result.metadataStatus === 'parse_error') result.metadataErrorCode = 'METADATA_PARSE_FAILED';
 
   return result;
 }

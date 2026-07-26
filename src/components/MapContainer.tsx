@@ -9,6 +9,7 @@ import { api, type AmapPoi } from '../api';
 import { describeBrowserLocationFailure, getBestBrowserLocation } from '../utils/browserLocation';
 import { wgs84ToGcj02 } from '../utils/coords';
 import { confirmedPhotoLocationFields } from '../utils/photoUpload';
+import { clusterPlaces } from '../utils/mapClusters';
 import type { Place, PlaceCategory, Media, MediaUploadInput } from '../types';
 
 /** 一张「本地已处理、尚未落库」的照片，等待用户在地图上确认位置与归属后一并保存。 */
@@ -183,6 +184,7 @@ export default function MapContainer({
   const markersRef = useRef<unknown[]>([]);
   const draftMarkerRef = useRef<unknown | undefined>(undefined);
   const [ready, setReady] = useState(false);
+  const [mapZoom, setMapZoom] = useState(4);
   const [error, setError] = useState('');
   const [keywords, setKeywords] = useState('');
   const [region, setRegion] = useState('');
@@ -345,6 +347,8 @@ export default function MapContainer({
         });
       }
       mapRef.current = map;
+      setMapZoom(map.getZoom());
+      map.on('zoomend', () => setMapZoom(map.getZoom()));
       setReady(true);
       // 双击/双指缩放会触发 zoomstart；AMap 可能吞掉 touchend 导致长按定时器残留，
       // 一旦地图开始缩放/移动就清除待定的长按，避免双击误创建标记
@@ -424,7 +428,35 @@ export default function MapContainer({
     if (!ready || !map || !AMap) return;
     if (markersRef.current.length) map.remove(markersRef.current);
 
-    markersRef.current = places.map((place) => {
+    markersRef.current = clusterPlaces(places, mapZoom).map((cluster) => {
+      if (cluster.places.length > 1) {
+        const content = document.createElement('button');
+        content.type = 'button';
+        content.className = 'flex h-11 min-w-11 items-center justify-center rounded-full border-2 border-white bg-blue-600 px-2 text-sm font-black text-white shadow-lg outline-none transition-transform hover:scale-110';
+        content.textContent = String(cluster.places.length);
+        content.title = `${cluster.places.length} 个地点，点击放大`;
+        const expandCluster = () => {
+          map.setZoomAndCenter(
+            Math.min(14, Math.max(map.getZoom() + 2, 8)),
+            [cluster.longitude, cluster.latitude],
+          );
+        };
+        content.addEventListener('click', (event) => {
+          event.stopPropagation();
+          expandCluster();
+        });
+        const marker = new AMap.Marker({
+          position: [cluster.longitude, cluster.latitude],
+          content,
+          anchor: 'center',
+          zIndex: 90,
+        });
+        marker.on('click', expandCluster);
+        map.add(marker);
+        return marker;
+      }
+
+      const place = cluster.places[0];
       const selected = selectedPlace?.id === place.id;
       const cover = place.cover_image || media.find((m) => m.place_id === place.id)?.file_path;
       const content = document.createElement('button');
@@ -478,7 +510,7 @@ export default function MapContainer({
       if (markersRef.current.length && mapRef.current) mapRef.current.remove(markersRef.current);
       markersRef.current = [];
     };
-  }, [categoryLabels, media, onSelectPlace, places, ready, selectedPlace]);
+  }, [categoryLabels, mapZoom, media, onSelectPlace, places, ready, selectedPlace]);
 
   useEffect(() => {
     const map = mapRef.current;

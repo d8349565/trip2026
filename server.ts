@@ -17,6 +17,15 @@ import { config } from './src/server/config';
 import { wgs84ToGcj02 } from './src/utils/coords';
 import { normalizeMediaLocation } from './src/server/mediaLocation';
 import {
+  extractPhotoMetadata,
+  normalizePhotoMetadataDiagnostics,
+} from './src/server/photoMetadata';
+import {
+  AmapGeocodingProvider,
+  GeocodingError,
+  GeocodingService,
+} from './src/server/geocoding';
+import {
   createAuthRouter,
   createSessionMiddleware,
   currentUser,
@@ -40,6 +49,9 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 const dbEngine = DbEngine.getInstance();
+const geocodingService = new GeocodingService(
+  config.amapWebServiceKey ? [new AmapGeocodingProvider(config.amapWebServiceKey)] : [],
+);
 app.use(createSessionMiddleware(dbEngine));
 app.use(originGuard);
 
@@ -72,6 +84,74 @@ app.get('/api/map/config', (_req, res) => {
 
 app.use('/api', requireAuth(dbEngine));
 
+app.get('/api/map/markers', (req, res) => {
+  const keys = ['west', 'south', 'east', 'north'] as const;
+  const presentKeys = keys.filter((key) => req.query[key] !== undefined);
+  if (presentKeys.length !== 0 && presentKeys.length !== keys.length) {
+    return res.status(400).json({
+      error: { code: 'INVALID_MAP_BOUNDS', message: '地图范围必须同时包含 west、south、east、north' },
+    });
+  }
+
+  let bounds: { west: number; south: number; east: number; north: number } | undefined;
+  if (presentKeys.length === keys.length) {
+    const values = Object.fromEntries(keys.map((key) => [key, Number(req.query[key])])) as typeof bounds;
+    if (!values
+      || !Object.values(values).every(Number.isFinite)
+      || values.west < -180
+      || values.east > 180
+      || values.south < -90
+      || values.north > 90
+      || values.west > values.east
+      || values.south > values.north) {
+      return res.status(400).json({
+        error: { code: 'INVALID_MAP_BOUNDS', message: '地图范围坐标无效' },
+      });
+    }
+    bounds = values;
+  }
+
+  const db = dbEngine.getRawDb();
+  const readableMedia = db.media.filter((item) => canRead(req, item));
+  const mediaByPlace = new Map<string, Media[]>();
+  for (const item of readableMedia) {
+    if (!item.place_id) continue;
+    const group = mediaByPlace.get(item.place_id);
+    if (group) group.push(item);
+    else mediaByPlace.set(item.place_id, [item]);
+  }
+
+  const allMarkers = db.places
+    .filter((place) => canRead(req, place))
+    .filter((place) => Number.isFinite(place.latitude) && Number.isFinite(place.longitude))
+    .filter((place) => !bounds || (
+      place.longitude >= bounds.west
+      && place.longitude <= bounds.east
+      && place.latitude >= bounds.south
+      && place.latitude <= bounds.north
+    ))
+    .map((place) => {
+      const placeMedia = mediaByPlace.get(place.id) ?? [];
+      return {
+        id: place.id,
+        name: place.name,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        category_id: place.category_id,
+        status: place.status,
+        favorite: place.favorite,
+        cover_image: place.cover_image || placeMedia[0]?.thumbnail_path,
+        photo_count: placeMedia.length,
+      };
+    });
+  const limit = 5_000;
+  return res.json({
+    markers: allMarkers.slice(0, limit),
+    total: allMarkers.length,
+    truncated: allMarkers.length > limit,
+  });
+});
+
 // ---------------- AMAP API ----------------
 
 function requireAmapWebServiceKey(res: express.Response): string | undefined {
@@ -80,6 +160,21 @@ function requireAmapWebServiceKey(res: express.Response): string | undefined {
     error: { code: 'AMAP_NOT_CONFIGURED', message: 'AMAP_WEB_SERVICE_KEY is not configured' },
   });
   return undefined;
+}
+
+function sendGeocodingError(res: express.Response, error: unknown) {
+  if (error instanceof GeocodingError) {
+    return res.status(error.code === 'GEOCODER_NOT_CONFIGURED' ? 503 : 502).json({
+      error: {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+      },
+    });
+  }
+  return res.status(502).json({
+    error: { code: 'GEOCODER_UPSTREAM_UNAVAILABLE', message: '地理编码服务暂不可用' },
+  });
 }
 
 async function requestAmap(res: express.Response, url: URL) {
@@ -165,34 +260,31 @@ function parseSharedMapPoint(value: string, sourceUrl: URL): SharedMapPoint | un
 }
 
 app.get('/api/map/poi', async (req, res) => {
-  const key = requireAmapWebServiceKey(res);
-  if (!key) return;
   const keywords = typeof req.query.keywords === 'string' ? req.query.keywords.trim() : '';
   if (!keywords || keywords.length > 100) {
     return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'keywords must contain 1 to 100 characters' } });
   }
-  const url = new URL('https://restapi.amap.com/v5/place/text');
-  url.searchParams.set('key', key);
-  url.searchParams.set('keywords', keywords);
-  url.searchParams.set('page_size', '20');
-  if (typeof req.query.region === 'string' && req.query.region.trim()) {
-    url.searchParams.set('region', req.query.region.trim().slice(0, 50));
+  const region = typeof req.query.region === 'string' && req.query.region.trim()
+    ? req.query.region.trim().slice(0, 50)
+    : undefined;
+  try {
+    return res.json(await geocodingService.searchPoi({ keywords, region }));
+  } catch (error) {
+    return sendGeocodingError(res, error);
   }
-  return requestAmap(res, url);
 });
 
 app.get('/api/map/regeocode', async (req, res) => {
-  const key = requireAmapWebServiceKey(res);
-  if (!key) return;
   const location = typeof req.query.location === 'string' ? req.query.location.trim() : '';
   if (!/^-?\d{1,3}(?:\.\d+)?,-?\d{1,2}(?:\.\d+)?$/.test(location)) {
     return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'location must use lng,lat coordinates' } });
   }
-  const url = new URL('https://restapi.amap.com/v3/geocode/regeo');
-  url.searchParams.set('key', key);
-  url.searchParams.set('location', location);
-  url.searchParams.set('extensions', 'all');
-  return requestAmap(res, url);
+  const [longitude, latitude] = location.split(',').map(Number);
+  try {
+    return res.json(await geocodingService.reverseGeocode({ latitude, longitude }));
+  } catch (error) {
+    return sendGeocodingError(res, error);
+  }
 });
 
 app.get('/api/map/ip', async (_req, res) => {
@@ -970,6 +1062,34 @@ app.post('/api/places/:id/add-to-trip', (req, res) => {
 
 // ---------------- MEDIA API ----------------
 
+app.post(
+  '/api/media/metadata',
+  express.raw({ type: () => true, limit: '50mb' }),
+  async (req, res) => {
+    if (!Buffer.isBuffer(req.body)) {
+      return res.status(400).json({
+        error: { code: 'PHOTO_BODY_REQUIRED', message: '请提交原始照片文件' },
+      });
+    }
+
+    const rawFilename = req.get('x-photo-filename');
+    let filename = rawFilename;
+    if (rawFilename) {
+      try {
+        filename = decodeURIComponent(rawFilename);
+      } catch {
+        filename = rawFilename;
+      }
+    }
+
+    const result = await extractPhotoMetadata(req.body, {
+      contentType: req.get('content-type'),
+      filename,
+    });
+    return res.json(result);
+  },
+);
+
 app.get('/api/media', (req, res) => {
   const db = dbEngine.getRawDb();
   const { place_id, trip_id } = req.query;
@@ -997,8 +1117,10 @@ app.post('/api/media/upload', (req, res) => {
   }
 
   let location: ReturnType<typeof normalizeMediaLocation>;
+  let metadataDiagnostics: ReturnType<typeof normalizePhotoMetadataDiagnostics>;
   try {
     location = normalizeMediaLocation(req.body);
+    metadataDiagnostics = normalizePhotoMetadataDiagnostics(req.body);
   } catch (error) {
     return res.status(400).json({
       error: {
@@ -1046,6 +1168,11 @@ app.post('/api/media/upload', (req, res) => {
     location_observed_at: location?.locationObservedAt,
     display_latitude: location?.displayLatitude,
     display_longitude: location?.displayLongitude,
+    metadata_status: metadataDiagnostics.metadata_status
+      ?? (location?.locationSource === 'exif' || location?.locationSource === 'xmp' ? 'found' : undefined),
+    metadata_parser: metadataDiagnostics.metadata_parser
+      ?? (location?.locationSource === 'exif' || location?.locationSource === 'xmp' ? 'client-exifr' : undefined),
+    metadata_error_code: metadataDiagnostics.metadata_error_code,
     place_id,
     trip_id,
     favorite: false,

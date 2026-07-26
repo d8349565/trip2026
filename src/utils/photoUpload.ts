@@ -9,6 +9,7 @@
 
 import { getBestBrowserLocation } from './browserLocation';
 import { readPhotoExif, type PhotoExif } from './photoExif';
+import { api } from '../api';
 import type { MediaUploadInput } from '../types';
 
 export interface PreparedPhoto {
@@ -30,13 +31,28 @@ export interface PreparePhotoOptions {
 
 type PhotoLocationFields = Pick<MediaUploadInput,
   'latitude' | 'longitude' | 'coordinate_system' | 'location_source'
-  | 'location_accuracy_m' | 'location_observed_at'>;
+  | 'location_accuracy_m' | 'location_observed_at'
+  | 'metadata_status' | 'metadata_parser' | 'metadata_error_code'>;
+
+function metadataDiagnosticFields(
+  value: Pick<PhotoExif, 'metadataStatus' | 'metadataParser' | 'metadataErrorCode'>,
+): PhotoLocationFields {
+  const fields: PhotoLocationFields = {};
+  if (value.metadataStatus) fields.metadata_status = value.metadataStatus;
+  if (value.metadataParser) fields.metadata_parser = value.metadataParser;
+  if (value.metadataErrorCode) fields.metadata_error_code = value.metadataErrorCode;
+  return fields;
+}
 
 export function photoLocationFields(
   exif: PhotoExif,
 ): PhotoLocationFields {
-  if (!Number.isFinite(exif.latitude) || !Number.isFinite(exif.longitude) || !exif.source) return {};
+  const diagnostics = metadataDiagnosticFields(exif);
+  if (!Number.isFinite(exif.latitude) || !Number.isFinite(exif.longitude) || !exif.source) {
+    return diagnostics;
+  }
   return {
+    ...diagnostics,
     latitude: exif.latitude,
     longitude: exif.longitude,
     coordinate_system: 'WGS84',
@@ -54,6 +70,9 @@ interface PendingPhotoLocation {
   locationSource?: 'exif' | 'xmp' | 'browser';
   locationAccuracyM?: number;
   locationObservedAt?: string;
+  metadataStatus?: PhotoExif['metadataStatus'];
+  metadataParser?: PhotoExif['metadataParser'];
+  metadataErrorCode?: string;
 }
 
 /**
@@ -76,6 +95,7 @@ export function confirmedPhotoLocationFields(
 
   if (confirmedChanged) {
     return {
+      ...metadataDiagnosticFields(original),
       latitude: confirmed?.latitude,
       longitude: confirmed?.longitude,
       coordinate_system: 'GCJ02',
@@ -84,8 +104,11 @@ export function confirmedPhotoLocationFields(
     };
   }
 
-  if (!hasOriginalWgs) return {};
+  if (!hasOriginalWgs) {
+    return metadataDiagnosticFields(original);
+  }
   return {
+    ...metadataDiagnosticFields(original),
     latitude: original.wgsLat,
     longitude: original.wgsLng,
     coordinate_system: 'WGS84',
@@ -106,6 +129,30 @@ export async function preparePhotoForUpload(
 ): Promise<PreparedPhoto> {
   // EXIF must be read before any re-encoding — canvas output has no GPS block.
   const exif = await readPhotoExif(file);
+
+  if (exif.latitude === undefined) {
+    try {
+      const serverMetadata = await api.probePhotoMetadata(file);
+      exif.metadataStatus = serverMetadata.status;
+      exif.metadataParser = serverMetadata.parser;
+      exif.metadataErrorCode = serverMetadata.errorCode;
+      exif.capturedAt ??= serverMetadata.capturedAt;
+      if (
+        serverMetadata.status === 'found'
+        && Number.isFinite(serverMetadata.latitude)
+        && Number.isFinite(serverMetadata.longitude)
+        && serverMetadata.source
+      ) {
+        exif.latitude = serverMetadata.latitude;
+        exif.longitude = serverMetadata.longitude;
+        exif.source = serverMetadata.source;
+      }
+    } catch {
+      exif.metadataStatus = 'probe_unavailable';
+      exif.metadataParser = 'server-exifr';
+      exif.metadataErrorCode = 'METADATA_PROBE_UNAVAILABLE';
+    }
+  }
 
   if (exif.latitude === undefined && options.allowBrowserLocationFallback) {
     const location = await getBestBrowserLocation();

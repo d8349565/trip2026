@@ -182,12 +182,46 @@ export interface Media {
   location_observed_at?: string;
   display_latitude?: number;
   display_longitude?: number;
+  metadata_status?: PhotoMetadataStatus;
+  metadata_parser?: PhotoMetadataParser;
+  metadata_error_code?: string;
   place_id?: string;
   visit_id?: string;
   trip_id?: string;
   favorite: boolean;
   visibility: 'private' | 'shared';
   created_at: string;
+}
+
+export type PhotoMetadataStatus =
+  | 'found'
+  | 'not_found'
+  | 'unsupported'
+  | 'parse_error'
+  | 'probe_unavailable';
+
+export type PhotoMetadataParser = 'client-exifr' | 'server-exifr';
+
+export interface PhotoMetadataProbeResult {
+  status: Exclude<PhotoMetadataStatus, 'probe_unavailable'>;
+  parser: 'server-exifr';
+  latitude?: number;
+  longitude?: number;
+  capturedAt?: string;
+  source?: 'exif' | 'xmp';
+  errorCode?: string;
+}
+
+export interface MapMarkerSummary {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  category_id: PlaceCategory;
+  status: 'want_to_go' | 'visited';
+  favorite: boolean;
+  cover_image?: string;
+  photo_count: number;
 }
 
 export interface MediaUploadInput {
@@ -206,6 +240,9 @@ export interface MediaUploadInput {
   location_source?: 'exif' | 'xmp' | 'browser' | 'manual';
   location_accuracy_m?: number;
   location_observed_at?: string;
+  metadata_status?: PhotoMetadataStatus;
+  metadata_parser?: PhotoMetadataParser;
+  metadata_error_code?: string;
 }
 
 // Guide Types
