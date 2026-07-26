@@ -10,6 +10,7 @@ import { describeBrowserLocationFailure, getBestBrowserLocation } from '../utils
 import { wgs84ToGcj02 } from '../utils/coords';
 import { confirmedPhotoLocationFields } from '../utils/photoUpload';
 import { clusterPlaces } from '../utils/mapClusters';
+import { resolveMapFocus, shouldFitAllPlacesInitially } from '../utils/mapViewport';
 import type { Place, PlaceCategory, Media, MediaUploadInput } from '../types';
 
 /** 一张「本地已处理、尚未落库」的照片，等待用户在地图上确认位置与归属后一并保存。 */
@@ -225,6 +226,13 @@ export default function MapContainer({
   // Track whether the draft name was auto-filled by the system (POI search / reverse geocode)
   // vs. manually typed by the user. Only auto-filled names get overwritten on marker drag.
   const nameAutoFilledRef = useRef(true);
+  const priorityFocus = resolveMapFocus(
+    photoUpload ? { latitude: photoUpload.gcjLat, longitude: photoUpload.gcjLng } : undefined,
+    photoDraft,
+    editRequest?.place,
+  );
+  const hasPriorityFocus = !!priorityFocus;
+  const isPhotoPosition = !!photoDraft || !!photoUpload || !!photoMode || uploadModeActive;
 
   const fitAllPlaces = () => {
     const map = mapRef.current;
@@ -388,15 +396,10 @@ export default function MapContainer({
         }, { passive: true });
       }
       // 若进入地图时已带有待确认坐标，先把视图定位过去。
-      // 优先照片待保存的 GCJ 坐标，其次旧 photoDraft 坐标。
+      // 优先照片待保存，其次旧照片确认，最后地点编辑。
       // MapContainer 仅在 map 视图挂载（条件渲染），首次渲染闭包即可拿到这些 prop。
-      const uploadCoord = photoUpload && Number.isFinite(photoUpload.gcjLat) && Number.isFinite(photoUpload.gcjLng)
-        ? { latitude: photoUpload.gcjLat, longitude: photoUpload.gcjLng }
-        : null;
-      const draftCoord = uploadCoord ?? photoDraft;
-      const hasDraftCoord = !!draftCoord && Number.isFinite(draftCoord.latitude) && Number.isFinite(draftCoord.longitude);
-      if (hasDraftCoord) {
-        map.setZoomAndCenter(16, [draftCoord.longitude as number, draftCoord.latitude as number]);
+      if (priorityFocus) {
+        map.setZoomAndCenter(16, [priorityFocus.longitude, priorityFocus.latitude]);
       } else {
         // 仅恢复近期、明确来自浏览器或手动微调的位置。首次打开不主动请求定位，
         // 避免权限失败或网络出口变化导致地图无故跳转。
@@ -504,13 +507,16 @@ export default function MapContainer({
     });
     if (!initialFitDoneRef.current && markersRef.current.length > 0) {
       initialFitDoneRef.current = true;
-      requestAnimationFrame(fitAllPlaces);
+      // 照片确认或地点编辑已指定明确焦点时，绝不能再用全量标记覆盖视野。
+      if (shouldFitAllPlacesInitially(markersRef.current.length, priorityFocus)) {
+        requestAnimationFrame(fitAllPlaces);
+      }
     }
     return () => {
       if (markersRef.current.length && mapRef.current) mapRef.current.remove(markersRef.current);
       markersRef.current = [];
     };
-  }, [categoryLabels, mapZoom, media, onSelectPlace, places, ready, selectedPlace]);
+  }, [categoryLabels, hasPriorityFocus, mapZoom, media, onSelectPlace, places, ready, selectedPlace]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -521,9 +527,28 @@ export default function MapContainer({
       draftMarkerRef.current = undefined;
       return;
     }
+    const content = document.createElement('div');
+    content.className = 'tf-draft-marker';
+    content.setAttribute('role', 'img');
+    content.setAttribute(
+      'aria-label',
+      isPhotoPosition ? '照片拍摄位置，可拖动微调' : '地点标记位置，可拖动微调',
+    );
+    content.innerHTML = `
+      <span class="tf-draft-marker__label">${isPhotoPosition ? '照片位置' : '标记位置'}</span>
+      <span class="tf-draft-marker__visual" aria-hidden="true">
+        <span class="tf-draft-marker__halo"></span>
+        <span class="tf-draft-marker__pin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11Z"></path>
+            <circle cx="12" cy="10" r="2.5"></circle>
+          </svg>
+        </span>
+        <span class="tf-draft-marker__anchor"></span>
+      </span>`;
     const marker = new AMap.Marker({
       position: [draft.longitude, draft.latitude], draggable: true, cursor: 'move',
-      anchor: 'bottom-center', zIndex: 500,
+      content, anchor: 'bottom-center', offset: [0, 6], zIndex: 500,
     });
     marker.on('dragend', (event) => {
       if (!event.lnglat) return;
@@ -538,7 +563,7 @@ export default function MapContainer({
       if (draftMarkerRef.current && mapRef.current) mapRef.current.remove(draftMarkerRef.current);
       draftMarkerRef.current = undefined;
     };
-  }, [draft?.latitude, draft?.longitude, ready]);
+  }, [draft?.latitude, draft?.longitude, isPhotoPosition, ready]);
 
   // 我的位置标记：蓝色脉冲圆点，可拖动重新设定位置（美团式交互）
   useEffect(() => {
