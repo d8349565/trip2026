@@ -9,7 +9,7 @@ import { api, type AmapPoi } from '../api';
 import { describeBrowserLocationFailure, getBestBrowserLocation } from '../utils/browserLocation';
 import { wgs84ToGcj02 } from '../utils/coords';
 import { confirmedPhotoLocationFields } from '../utils/photoUpload';
-import { clusterPlaces } from '../utils/mapClusters';
+import { clusterPlaces, selectClusterRepresentative, summarizePlaceMedia } from '../utils/mapClusters';
 import { resolveMapFocus, shouldFitAllPlacesInitially } from '../utils/mapViewport';
 import type { Place, PlaceCategory, Media, MediaUploadInput } from '../types';
 
@@ -63,6 +63,7 @@ interface MapContainerProps {
 type AMapLngLat = { getLng: () => number; getLat: () => number };
 type AMapEvent = { lnglat?: AMapLngLat };
 type AMapMarker = { on: (event: string, handler: (event: AMapEvent) => void) => void };
+type AMapFeature = 'bg' | 'point' | 'road' | 'building';
 type AMapInstance = {
   add: (overlay: unknown | unknown[]) => void;
   remove: (overlay: unknown | unknown[]) => void;
@@ -77,6 +78,7 @@ type AMapInstance = {
     avoid?: [number, number, number, number],
     maxZoom?: number,
   ) => void;
+  setFeatures: (features: AMapFeature[]) => void;
   on: (event: string, handler: (event: AMapEvent) => void) => void;
   containerToLngLat: (pixel: { getX?: () => number; getY?: () => number }) => AMapLngLat | null;
 };
@@ -84,6 +86,15 @@ type AMapGlobal = {
   Map: new (container: HTMLDivElement, options: Record<string, unknown>) => AMapInstance;
   Marker: new (options: Record<string, unknown>) => AMapMarker;
 };
+
+const AMAP_TRAVEL_STYLE = 'amap://styles/whitesmoke';
+const AMAP_DETAIL_ZOOM = 12;
+const AMAP_OVERVIEW_FEATURES: AMapFeature[] = ['bg', 'road', 'building'];
+const AMAP_DETAIL_FEATURES: AMapFeature[] = [...AMAP_OVERVIEW_FEATURES, 'point'];
+
+function getMapFeatures(zoom: number): AMapFeature[] {
+  return zoom >= AMAP_DETAIL_ZOOM ? AMAP_DETAIL_FEATURES : AMAP_OVERVIEW_FEATURES;
+}
 
 interface MyLocationState {
   latitude: number;
@@ -183,6 +194,7 @@ export default function MapContainer({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<AMapInstance | undefined>(undefined);
   const markersRef = useRef<unknown[]>([]);
+  const markerElementsRef = useRef<HTMLElement[]>([]);
   const draftMarkerRef = useRef<unknown | undefined>(undefined);
   const [ready, setReady] = useState(false);
   const [mapZoom, setMapZoom] = useState(4);
@@ -198,6 +210,10 @@ export default function MapContainer({
   const [message, setMessage] = useState('');
   const [contextMenu, setContextMenu] = useState<{ place: Place; x: number; y: number } | null>(null);
   const [photoMode, setPhotoMode] = useState<string | null>(null);
+  const placeMediaSummaries = useMemo(
+    () => summarizePlaceMedia(places, media),
+    [media, places],
+  );
   const photoModeRef = useRef<string | null>(null);
   // 「照片待保存」模式：照片尚未落库，确认位置+归属后与地点一并保存。
   const [uploadModeActive, setUploadModeActive] = useState(false);
@@ -335,9 +351,12 @@ export default function MapContainer({
     let disposed = false;
     loadAmap().then((AMap) => {
       if (disposed || !containerRef.current) return;
+      const initialZoom = places.length === 0 ? 4 : places.length > 1 ? 11 : 13;
       const map = new AMap.Map(containerRef.current, {
         center: initialCenterRef.current,
-        zoom: places.length === 0 ? 4 : places.length > 1 ? 11 : 13,
+        zoom: initialZoom,
+        mapStyle: AMAP_TRAVEL_STYLE,
+        features: getMapFeatures(initialZoom),
         viewMode: '2D',
         doubleClickZoom: isTouchDevice,
         resizeEnable: true,
@@ -356,14 +375,24 @@ export default function MapContainer({
       }
       mapRef.current = map;
       setMapZoom(map.getZoom());
-      map.on('zoomend', () => setMapZoom(map.getZoom()));
+      map.on('zoomend', () => {
+        const zoom = map.getZoom();
+        setMapZoom(zoom);
+        map.setFeatures(getMapFeatures(zoom));
+      });
       setReady(true);
       // 双击/双指缩放会触发 zoomstart；AMap 可能吞掉 touchend 导致长按定时器残留，
       // 一旦地图开始缩放/移动就清除待定的长按，避免双击误创建标记
       const clearLongPress = () => {
         if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = undefined; }
       };
-      map.on('zoomstart', clearLongPress);
+      map.on('zoomstart', () => {
+        clearLongPress();
+        for (const element of markerElementsRef.current) {
+          element.style.opacity = '0';
+          element.style.pointerEvents = 'none';
+        }
+      });
       map.on('movestart', clearLongPress);
       // 移动端长按创建标记（600ms，移动超 10px 取消）
       if (isTouchDevice && containerRef.current) {
@@ -430,14 +459,52 @@ export default function MapContainer({
     const AMap = window.AMap;
     if (!ready || !map || !AMap) return;
     if (markersRef.current.length) map.remove(markersRef.current);
+    markerElementsRef.current = [];
+
+    const revealMarker = (element: HTMLElement) => {
+      element.style.opacity = '0';
+      markerElementsRef.current.push(element);
+      requestAnimationFrame(() => {
+        if (!element.isConnected) return;
+        element.style.opacity = '1';
+        element.style.pointerEvents = '';
+      });
+    };
 
     markersRef.current = clusterPlaces(places, mapZoom).map((cluster) => {
       if (cluster.places.length > 1) {
+        const representative = selectClusterRepresentative(cluster.places, placeMediaSummaries);
         const content = document.createElement('button');
         content.type = 'button';
-        content.className = 'flex h-11 min-w-11 items-center justify-center rounded-full border-2 border-white bg-blue-600 px-2 text-sm font-black text-white shadow-lg outline-none transition-transform hover:scale-110';
-        content.textContent = String(cluster.places.length);
-        content.title = `${cluster.places.length} 个地点，点击放大`;
+        content.className = 'group relative flex h-14 w-14 cursor-pointer items-center justify-center rounded-2xl outline-none transition-[opacity,transform] duration-150 hover:scale-105 focus-visible:ring-4 focus-visible:ring-blue-400/40 motion-reduce:transition-none';
+        content.title = representative
+          ? `${cluster.places.length} 个地点，代表地点：${representative.place.name}（${representative.media.photoCount} 张照片），点击放大`
+          : `${cluster.places.length} 个地点，点击放大`;
+
+        const stack = document.createElement('span');
+        stack.className = 'absolute inset-1 translate-x-1 translate-y-1 rounded-2xl border-2 border-white bg-blue-100 shadow-lg';
+        content.appendChild(stack);
+
+        const thumbnail = document.createElement('span');
+        thumbnail.className = 'relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border-2 border-white bg-gradient-to-br from-blue-500 to-blue-700 text-lg font-black text-white shadow-lg';
+        if (representative?.media.coverUrl) {
+          const image = document.createElement('img');
+          image.src = representative.media.coverUrl;
+          image.alt = `${representative.place.name}封面`;
+          image.loading = 'lazy';
+          image.referrerPolicy = 'no-referrer';
+          image.className = 'h-full w-full object-cover';
+          thumbnail.appendChild(image);
+        } else {
+          thumbnail.textContent = representative?.place.name.trim().slice(0, 1) || '地';
+        }
+        content.appendChild(thumbnail);
+
+        const countBadge = document.createElement('span');
+        countBadge.className = 'absolute -right-1 -top-1 z-10 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-blue-600 px-1 text-[10px] font-black leading-none text-white shadow-md';
+        countBadge.textContent = String(cluster.places.length);
+        content.appendChild(countBadge);
+
         const expandCluster = () => {
           map.setZoomAndCenter(
             Math.min(14, Math.max(map.getZoom() + 2, 8)),
@@ -456,16 +523,17 @@ export default function MapContainer({
         });
         marker.on('click', expandCluster);
         map.add(marker);
+        revealMarker(content);
         return marker;
       }
 
       const place = cluster.places[0];
       const selected = selectedPlace?.id === place.id;
-      const cover = place.cover_image || media.find((m) => m.place_id === place.id)?.file_path;
+      const cover = placeMediaSummaries.get(place.id)?.coverUrl;
       const content = document.createElement('button');
       content.type = 'button';
       content.dataset.placeMarker = place.id;
-      content.className = 'group flex flex-col items-center outline-none';
+      content.className = 'group flex flex-col items-center outline-none transition-opacity duration-150 motion-reduce:transition-none';
       content.title = `${categoryLabels[place.category_id] ?? '地点'}：${place.name}（右键管理）`;
       const safeName = place.name.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
       const visitedBadge = place.status === 'visited' ? '<i class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-emerald-500 text-[9px] not-italic text-white z-10">✓</i>' : '';
@@ -503,6 +571,7 @@ export default function MapContainer({
         onSelectPlace(place);
       });
       map.add(marker);
+      revealMarker(content);
       return marker;
     });
     if (!initialFitDoneRef.current && markersRef.current.length > 0) {
@@ -515,8 +584,9 @@ export default function MapContainer({
     return () => {
       if (markersRef.current.length && mapRef.current) mapRef.current.remove(markersRef.current);
       markersRef.current = [];
+      markerElementsRef.current = [];
     };
-  }, [categoryLabels, hasPriorityFocus, mapZoom, media, onSelectPlace, places, ready, selectedPlace]);
+  }, [categoryLabels, hasPriorityFocus, mapZoom, onSelectPlace, placeMediaSummaries, places, ready, selectedPlace]);
 
   useEffect(() => {
     const map = mapRef.current;
