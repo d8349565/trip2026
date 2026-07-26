@@ -20,3 +20,4 @@ tests/*.heic
 # 本地 TLS 证书与私钥
 local-tls/
 .scratch
+.codegraph/
