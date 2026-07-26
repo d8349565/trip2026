@@ -15,6 +15,7 @@ import { DbEngine, hashPassword } from './src/dbEngine';
 import { AppDatabase, Place, Trip, TripDay, TripItem, Guide, Checklist, ChecklistItem, Media } from './src/types';
 import { config } from './src/server/config';
 import { wgs84ToGcj02 } from './src/utils/coords';
+import { normalizeMediaLocation } from './src/server/mediaLocation';
 import {
   createAuthRouter,
   createSessionMiddleware,
@@ -989,14 +990,27 @@ app.get('/api/media', (req, res) => {
 app.post('/api/media/upload', (req, res) => {
   const userId = getCurrentUserId(req);
   const db = dbEngine.getRawDb();
-  const { filename, file_size, dataUrl, place_id, trip_id, captured_at, lat, lng } = req.body;
+  const { filename, file_size, dataUrl, place_id, trip_id, captured_at } = req.body;
 
   if (!dataUrl) {
     return res.status(400).json({ error: '没有文件数据' });
   }
 
+  let location: ReturnType<typeof normalizeMediaLocation>;
+  try {
+    location = normalizeMediaLocation(req.body);
+  } catch (error) {
+    return res.status(400).json({
+      error: {
+        code: 'INVALID_MEDIA_LOCATION',
+        message: error instanceof Error ? error.message : '照片位置格式无效',
+      },
+    });
+  }
+
   // Target directory
-  const relativePath = path.join('places', `${Date.now()}_${filename || 'photo.jpg'}`);
+  const safeFilename = path.basename(String(filename || 'photo.jpg')).replace(/[^\p{L}\p{N}._-]+/gu, '_');
+  const relativePath = path.join('places', `${Date.now()}_${safeFilename || 'photo.jpg'}`);
   const targetPath = path.join(UPLOADS_DIR, relativePath);
 
   // Parse dataUrl
@@ -1013,16 +1027,6 @@ app.post('/api/media/upload', (req, res) => {
 
   fs.writeFileSync(targetPath, buffer);
 
-  // Incoming lat/lng come from the photo's EXIF and are WGS84. Keep the raw
-  // values in exif_* and store GCJ-02 in display_* so markers land correctly
-  // on the AMap map.
-  const exifLatitude = lat !== undefined && lat !== null && lat !== '' ? Number(lat) : NaN;
-  const exifLongitude = lng !== undefined && lng !== null && lng !== '' ? Number(lng) : NaN;
-  const hasGps = Number.isFinite(exifLatitude) && Number.isFinite(exifLongitude)
-    && Math.abs(exifLatitude) <= 90 && Math.abs(exifLongitude) <= 180
-    && (exifLatitude !== 0 || exifLongitude !== 0);
-  const display = hasGps ? wgs84ToGcj02(exifLatitude, exifLongitude) : undefined;
-
   const mediaId = 'm_' + Math.random().toString(36).substring(2, 9);
   const newMedia: Media = {
     id: mediaId,
@@ -1032,10 +1036,16 @@ app.post('/api/media/upload', (req, res) => {
     file_hash: crypto.createHash('md5').update(buffer).digest('hex'),
     file_size: file_size || buffer.length,
     captured_at: captured_at || new Date().toISOString(),
-    exif_latitude: hasGps ? exifLatitude : undefined,
-    exif_longitude: hasGps ? exifLongitude : undefined,
-    display_latitude: display?.latitude,
-    display_longitude: display?.longitude,
+    exif_latitude: location?.exifLatitude,
+    exif_longitude: location?.exifLongitude,
+    source_latitude: location?.sourceLatitude,
+    source_longitude: location?.sourceLongitude,
+    source_coordinate_system: location?.sourceCoordinateSystem,
+    location_source: location?.locationSource,
+    location_accuracy_m: location?.locationAccuracyM,
+    location_observed_at: location?.locationObservedAt,
+    display_latitude: location?.displayLatitude,
+    display_longitude: location?.displayLongitude,
     place_id,
     trip_id,
     favorite: false,

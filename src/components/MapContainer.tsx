@@ -3,11 +3,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Check, Crosshair, Edit3, Link2, LocateFixed, MapPin, Minus, Plus, Search, Trash2, X } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, ChevronRight, Crosshair, Edit3, Heart, Link2, LocateFixed, MapPin, Minus, Plus, Search, Trash2, X } from 'lucide-react';
 import { api, type AmapPoi } from '../api';
+import { describeBrowserLocationFailure, getBestBrowserLocation } from '../utils/browserLocation';
 import { wgs84ToGcj02 } from '../utils/coords';
-import type { Place, PlaceCategory, Media } from '../types';
+import { confirmedPhotoLocationFields } from '../utils/photoUpload';
+import type { Place, PlaceCategory, Media, MediaUploadInput } from '../types';
+
+/** 一张「本地已处理、尚未落库」的照片，等待用户在地图上确认位置与归属后一并保存。 */
+export interface PendingPhotoUpload {
+  token: number;
+  fileName: string;
+  fileSize: number;
+  dataUrl: string;
+  capturedAt?: string;
+  /** 原始 EXIF/定位坐标，WGS84，保存时原样传给服务器。 */
+  wgsLat?: number;
+  wgsLng?: number;
+  /** 客户端换算后的 GCJ-02 坐标，供地图标记与反查使用。 */
+  gcjLat?: number;
+  gcjLng?: number;
+  locationSource?: 'exif' | 'xmp' | 'browser';
+  locationAccuracyM?: number;
+  locationObservedAt?: string;
+  name?: string;
+  address?: string;
+}
 
 interface MapContainerProps {
   places: Place[];
@@ -21,6 +43,14 @@ interface MapContainerProps {
   editRequest?: { token: number; place: Place } | null;
   photoDraft?: { token: number; mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string } | null;
   onPhotoDraftEnd?: () => void;
+  /** 待一并保存的照片（照片尚未落库）；存在时进入「确认位置+归属」模式。 */
+  photoUpload?: PendingPhotoUpload | null;
+  /** 确认流程结束：saved=已保存（留地图），cancel=放弃（回照片页）。 */
+  onPhotoUploadDone?: (result: 'saved' | 'cancel') => void;
+  /** 把照片落库（可带 place_id），内部应刷新数据。 */
+  onSavePhoto?: (data: MediaUploadInput) => Promise<Media | undefined>;
+  /** 手机端定位按钮通过递增 token 触发地图重新定位。 */
+  locateRequest?: number;
   categoryColors: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }>;
   categoryLabels: Record<PlaceCategory, string>;
   categoryIcons: Record<PlaceCategory, React.ReactNode>;
@@ -46,6 +76,16 @@ type AMapGlobal = {
   Map: new (container: HTMLDivElement, options: Record<string, unknown>) => AMapInstance;
   Marker: new (options: Record<string, unknown>) => AMapMarker;
 };
+
+interface MyLocationState {
+  latitude: number;
+  longitude: number;
+  accuracyM?: number;
+  source: 'browser' | 'manual';
+  observedAt: string;
+  address?: string;
+  name?: string;
+}
 
 declare global {
   interface Window {
@@ -90,7 +130,7 @@ const EMPTY_DRAFT: Partial<Place> = {
 };
 
 function mapCenter(places: Place[]): [number, number] {
-  if (!places.length) return [116.63, 23.66];
+  if (!places.length) return [104.2, 35.9];
   const total = places.reduce((result, place) => ({
     lng: result.lng + place.longitude,
     lat: result.lat + place.latitude,
@@ -123,6 +163,10 @@ export default function MapContainer({
   editRequest = null,
   photoDraft = null,
   onPhotoDraftEnd,
+  photoUpload = null,
+  onPhotoUploadDone,
+  onSavePhoto,
+  locateRequest = 0,
   categoryLabels,
   searchSlot,
 }: MapContainerProps) {
@@ -146,7 +190,14 @@ export default function MapContainer({
   const [contextMenu, setContextMenu] = useState<{ place: Place; x: number; y: number } | null>(null);
   const [photoMode, setPhotoMode] = useState<string | null>(null);
   const photoModeRef = useRef<string | null>(null);
-  const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number; address?: string; name?: string } | null>(null);
+  // 「照片待保存」模式：照片尚未落库，确认位置+归属后与地点一并保存。
+  const [uploadModeActive, setUploadModeActive] = useState(false);
+  const uploadModeRef = useRef(false);
+  // 上传确认时的归属选择：新建地点 / 并入已有 / 仅保存照片。
+  const [attribMode, setAttribMode] = useState<'new' | 'existing' | 'none'>('new');
+  const [selectedExistingId, setSelectedExistingId] = useState<string | null>(null);
+  const [existingQuery, setExistingQuery] = useState('');
+  const [myLocation, setMyLocation] = useState<MyLocationState | null>(null);
   const myLocMarkerRef = useRef<unknown | undefined>(undefined);
   const initialCenterRef = useRef(mapCenter(places));
   // 手势模式按“主指针”判定：触屏笔记本的主指针仍是鼠标(fine)，应走 PC 双击建点；
@@ -162,6 +213,9 @@ export default function MapContainer({
   // 长按检测 ref
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Track whether the draft name was auto-filled by the system (POI search / reverse geocode)
+  // vs. manually typed by the user. Only auto-filled names get overwritten on marker drag.
+  const nameAutoFilledRef = useRef(true);
 
   const enterPhotoMode = (mediaId: string) => {
     photoModeRef.current = mediaId;
@@ -180,7 +234,7 @@ export default function MapContainer({
       const location = await api.reverseGeocode(latitude, longitude);
       const { name, ...fields } = location;
       setDraft((current) => current && current.latitude === latitude && current.longitude === longitude
-        ? { ...current, ...fields, ...(current.name ? {} : name ? { name } : {}) }
+        ? { ...current, ...fields, ...(nameAutoFilledRef.current && name ? { name } : {}) }
         : current);
     } catch {
       setMessage('坐标已更新，但地址反查失败；可手动修改地址。');
@@ -191,6 +245,7 @@ export default function MapContainer({
     setEditingId(null);
     setContextMenu(null);
     setMessage('拖动蓝色标记可微调位置，保存前地图始终可见。');
+    nameAutoFilledRef.current = true;
     setDraft({ ...EMPTY_DRAFT, ...seed, latitude, longitude });
     mapRef.current?.setZoomAndCenter(16, [longitude, latitude]);
     if (!seed.address) void reversePosition(latitude, longitude);
@@ -206,6 +261,7 @@ export default function MapContainer({
     if (!editRequest) return;
     endPhotoMode();
     const place = editRequest.place;
+    nameAutoFilledRef.current = true;
     setEditingId(place.id);
     setDraft({ ...place });
     setContextMenu(null);
@@ -226,12 +282,33 @@ export default function MapContainer({
   }, [photoDraft?.token]);
 
   useEffect(() => {
+    if (!photoUpload) return;
+    // 进入「照片待保存」模式：照片尚未落库，确认位置+归属后一并保存。
+    uploadModeRef.current = true;
+    setUploadModeActive(true);
+    setEditingId(null);
+    setContextMenu(null);
+    setDraftExpanded(true);
+    setAttribMode('new');
+    setSelectedExistingId(null);
+    setExistingQuery('');
+    const { gcjLat, gcjLng, name, address } = photoUpload;
+    if (Number.isFinite(gcjLat) && Number.isFinite(gcjLng)) {
+      startDraftAt(gcjLat as number, gcjLng as number, { name: name ?? '', address: address ?? '' });
+      setMessage('已按照片位置预填标记，可拖动微调；选择归属后点保存，照片将一并存入。');
+    } else {
+      setDraft({ ...EMPTY_DRAFT, name: name ?? '', address: address ?? '' });
+      setMessage('这张照片没有位置信息：手机长按、电脑双击地图选择拍摄位置，再选归属保存。');
+    }
+  }, [photoUpload?.token]);
+
+  useEffect(() => {
     let disposed = false;
     loadAmap().then((AMap) => {
       if (disposed || !containerRef.current) return;
       const map = new AMap.Map(containerRef.current, {
         center: initialCenterRef.current,
-        zoom: places.length > 1 ? 11 : 13,
+        zoom: places.length === 0 ? 4 : places.length > 1 ? 11 : 13,
         viewMode: '2D',
         doubleClickZoom: isTouchDevice,
         resizeEnable: true,
@@ -287,15 +364,31 @@ export default function MapContainer({
           longPressStartRef.current = null;
         }, { passive: true });
       }
-      // 先恢复上次记住的位置（立即显示蓝点，无需等待授权），再尝试刷新到最新位置
-      const saved = (() => {
-        try { return JSON.parse(localStorage.getItem(MY_LOCATION_KEY) ?? 'null'); } catch { return null; }
-      })();
-      if (saved && Number.isFinite(saved.latitude) && Number.isFinite(saved.longitude)) {
-        applyMyLocation(saved.latitude, saved.longitude, 15);
-        void refreshMyLocationAddress(saved.latitude, saved.longitude);
+      // 若进入地图时已带有待确认坐标，先把视图定位过去。
+      // 优先照片待保存的 GCJ 坐标，其次旧 photoDraft 坐标。
+      // MapContainer 仅在 map 视图挂载（条件渲染），首次渲染闭包即可拿到这些 prop。
+      const uploadCoord = photoUpload && Number.isFinite(photoUpload.gcjLat) && Number.isFinite(photoUpload.gcjLng)
+        ? { latitude: photoUpload.gcjLat, longitude: photoUpload.gcjLng }
+        : null;
+      const draftCoord = uploadCoord ?? photoDraft;
+      const hasDraftCoord = !!draftCoord && Number.isFinite(draftCoord.latitude) && Number.isFinite(draftCoord.longitude);
+      if (hasDraftCoord) {
+        map.setZoomAndCenter(16, [draftCoord.longitude as number, draftCoord.latitude as number]);
+      } else {
+        // 仅恢复近期、明确来自浏览器或手动微调的位置。首次打开不主动请求定位，
+        // 避免权限失败或网络出口变化导致地图无故跳转。
+        const saved = (() => {
+          try { return JSON.parse(localStorage.getItem(MY_LOCATION_KEY) ?? 'null'); } catch { return null; }
+        })();
+        const savedAt = typeof saved?.observedAt === 'string' ? new Date(saved.observedAt).getTime() : NaN;
+        const isRecent = Number.isFinite(savedAt) && Date.now() - savedAt <= 10 * 60_000;
+        if (saved && isRecent
+          && (saved.source === 'browser' || saved.source === 'manual')
+          && Number.isFinite(saved.latitude) && Number.isFinite(saved.longitude)) {
+          applyMyLocation(saved as MyLocationState, 15, false);
+          void refreshMyLocationAddress(saved.latitude, saved.longitude);
+        }
       }
-      void locateAndCenter();
     }).catch((cause) => {
       if (!disposed) setError(cause instanceof Error ? cause.message : '高德地图加载失败');
     });
@@ -416,9 +509,14 @@ export default function MapContainer({
       if (!event.lnglat) return;
       const latitude = Number(event.lnglat.getLat().toFixed(6));
       const longitude = Number(event.lnglat.getLng().toFixed(6));
-      applyMyLocation(latitude, longitude);
+      applyMyLocation({
+        latitude,
+        longitude,
+        source: 'manual',
+        observedAt: new Date().toISOString(),
+      });
       void refreshMyLocationAddress(latitude, longitude);
-      setMessage('当前位置已更新，可继续拖动蓝点调整。');
+      setMessage('已手动调整当前位置，可继续拖动蓝点微调。');
     });
     map.add(marker);
     myLocMarkerRef.current = marker;
@@ -435,14 +533,19 @@ export default function MapContainer({
   // ---- 我的位置：蓝色脉冲定位点，可拖动重新设定，位置记住到本地 ----
   const MY_LOCATION_KEY = 'tf-my-location';
 
-  const applyMyLocation = (latitude: number, longitude: number, zoom?: number) => {
-    setMyLocation((current) => current && current.latitude === latitude && current.longitude === longitude
-      ? current
-      : { latitude, longitude });
-    try {
-      localStorage.setItem(MY_LOCATION_KEY, JSON.stringify({ latitude, longitude }));
-    } catch { /* storage unavailable */ }
-    if (zoom) mapRef.current?.setZoomAndCenter(zoom, [longitude, latitude]);
+  const applyMyLocation = (location: MyLocationState, zoom?: number, persist = true) => {
+    setMyLocation((current) => current
+      && current.latitude === location.latitude
+      && current.longitude === location.longitude
+      && current.accuracyM === location.accuracyM
+      ? { ...current, ...location }
+      : location);
+    if (persist) {
+      try {
+        localStorage.setItem(MY_LOCATION_KEY, JSON.stringify(location));
+      } catch { /* storage unavailable */ }
+    }
+    if (zoom) mapRef.current?.setZoomAndCenter(zoom, [location.longitude, location.latitude]);
   };
 
   const refreshMyLocationAddress = async (latitude: number, longitude: number) => {
@@ -456,35 +559,34 @@ export default function MapContainer({
     }
   };
 
-  // Center the map on the user: precise browser geolocation first (works on
-  // localhost/HTTPS; browsers block it on plain-HTTP LAN addresses), then
-  // AMap IP city location, then keep the last remembered / centroid default.
+  // 只接受浏览器设备定位。失败时保持当前视野，不使用网络出口 IP 猜测位置。
   const locateAndCenter = async () => {
-    if ('geolocation' in navigator) {
-      const positioned = await new Promise<boolean>((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude } = wgs84ToGcj02(position.coords.latitude, position.coords.longitude);
-            applyMyLocation(latitude, longitude, 15);
-            void refreshMyLocationAddress(latitude, longitude);
-            resolve(true);
-          },
-          () => resolve(false),
-          { timeout: 8000, maximumAge: 300000 },
-        );
-      });
-      if (positioned) return;
+    setMessage('正在获取高精度位置…');
+    const result = await getBestBrowserLocation();
+    if (result.ok) {
+      const { latitude, longitude } = wgs84ToGcj02(result.fix.latitude, result.fix.longitude);
+      applyMyLocation({
+        latitude,
+        longitude,
+        accuracyM: result.fix.accuracyM,
+        source: 'browser',
+        observedAt: result.fix.observedAt,
+      }, 16);
+      void refreshMyLocationAddress(latitude, longitude);
+      setMessage(`定位完成，当前精度约 ±${Math.round(result.fix.accuracyM)} 米；可拖动蓝点微调。`);
+      return;
     }
-    try {
-      const point = await api.locateByIp();
-      if (point) {
-        applyMyLocation(point.latitude, point.longitude, 11);
-        void refreshMyLocationAddress(point.latitude, point.longitude);
-      }
-    } catch {
-      // Keep the default center derived from existing places.
-    }
+
+    const failureMessage = describeBrowserLocationFailure(
+      'reason' in result ? result.reason : 'position-unavailable',
+    );
+    setMessage(failureMessage);
   };
+
+  useEffect(() => {
+    if (!ready || !locateRequest) return;
+    void locateAndCenter();
+  }, [locateRequest, ready]);
 
   const createAtMyLocation = () => {
     if (!myLocation) return;
@@ -550,6 +652,7 @@ export default function MapContainer({
   };
 
   const editPlace = (place: Place) => {
+    nameAutoFilledRef.current = true;
     setEditingId(place.id);
     setDraft({ ...place });
     setContextMenu(null);
@@ -557,7 +660,7 @@ export default function MapContainer({
     mapRef.current?.setZoomAndCenter(16, [place.longitude, place.latitude]);
   };
 
-  const deletePlace = async (place: Place) => {
+  const deletePlace = async (place: Pick<Place, 'id' | 'name'>) => {
     setContextMenu(null);
     if (!window.confirm(`确定删除“${place.name}”吗？关联打卡会删除，照片和行程将解除地点关联。`)) return;
     setBusy(true);
@@ -576,6 +679,10 @@ export default function MapContainer({
 
   const savePlace = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (uploadModeActive) {
+      await savePhotoUpload();
+      return;
+    }
     if (!draft?.name?.trim() || !Number.isFinite(draft.latitude) || !Number.isFinite(draft.longitude)) {
       setMessage('地点名称和有效坐标不能为空。');
       return;
@@ -597,7 +704,99 @@ export default function MapContainer({
     }
   };
 
-  const updateDraft = (field: keyof Place, value: unknown) => setDraft((current) => current ? { ...current, [field]: value } : current);
+  // 照片待保存模式的一次性保存：按需新建/并入地点，再把照片落库（带 place_id）。
+  const savePhotoUpload = async () => {
+    const pu = photoUpload;
+    if (!pu || !onSavePhoto) return;
+    let placeId: string | undefined;
+    if (attribMode === 'new') {
+      const d = draft;
+      if (!d?.name?.trim() || !Number.isFinite(d.latitude) || !Number.isFinite(d.longitude)) {
+        setMessage('请填写地点名称，并在地图上确认坐标。');
+        return;
+      }
+      setBusy(true);
+      setMessage('');
+      try {
+        const created = await onCreatePlace({
+          name: d.name.trim(),
+          category_id: d.category_id ?? 'scenic',
+          latitude: d.latitude as number,
+          longitude: d.longitude as number,
+          coordinate_system: 'GCJ02',
+          address: d.address ?? '',
+        });
+        placeId = created.id;
+      } catch (cause) {
+        setBusy(false);
+        setMessage(cause instanceof Error ? cause.message : '地点创建失败');
+        return;
+      }
+    } else if (attribMode === 'existing') {
+      if (!selectedExistingId) {
+        setMessage('请选择要并入的已有地点。');
+        return;
+      }
+      placeId = selectedExistingId;
+      setBusy(true);
+      setMessage('');
+    } else {
+      setBusy(true);
+      setMessage('');
+    }
+    try {
+      const location = confirmedPhotoLocationFields(pu, {
+        latitude: draft?.latitude,
+        longitude: draft?.longitude,
+      });
+      await onSavePhoto({
+        filename: pu.fileName,
+        file_size: pu.fileSize,
+        dataUrl: pu.dataUrl,
+        place_id: placeId,
+        captured_at: pu.capturedAt,
+        ...location,
+      });
+      setDraft(null);
+      setEditingId(null);
+      setDraftExpanded(false);
+      setAttribMode('new');
+      setSelectedExistingId(null);
+      setExistingQuery('');
+      uploadModeRef.current = false;
+      setUploadModeActive(false);
+      setMessage('');
+      onPhotoUploadDone?.('saved');
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : '照片保存失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // 关闭照片相关流程：上传模式=放弃（照片不存，回照片页），旧 photoDraft 模式=结束关联。
+  const closePhotoFlow = () => {
+    const wasUpload = uploadModeActive;
+    setDraft(null);
+    setEditingId(null);
+    setDraftExpanded(false);
+    setMessage('');
+    setAttribMode('new');
+    setSelectedExistingId(null);
+    setExistingQuery('');
+    if (wasUpload) {
+      uploadModeRef.current = false;
+      setUploadModeActive(false);
+      onPhotoUploadDone?.('cancel');
+    } else {
+      endPhotoMode();
+    }
+  };
+
+  const updateDraft = (field: keyof Place, value: unknown) => {
+    if (field === 'name') nameAutoFilledRef.current = false;
+    setDraft((current) => current ? { ...current, [field]: value } : current);
+  };
   const inputClass = 'w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs outline-none focus:border-blue-400';
 
   return (
@@ -607,23 +806,23 @@ export default function MapContainer({
       {!ready && !error && <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-50 text-sm font-semibold text-slate-500">正在加载高德地图…</div>}
       {error && <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-50 px-6 text-center"><p className="font-bold text-red-600">{error}</p><p className="mt-2 text-xs text-slate-500">请检查 Key 类型、安全密钥和域名配置。</p></div>}
 
-      <div className="absolute left-3 right-16 top-3 z-40 max-w-md" onClick={(event) => event.stopPropagation()}>
-        <div className="flex rounded-2xl border border-slate-100 bg-white/95 p-1.5 shadow-lg backdrop-blur-md">
-          {searchMode === 'poi' ? <form onSubmit={searchPoi} className="flex min-w-0 flex-1 gap-1.5">
-            <Search size={16} className="ml-2 mt-2 shrink-0 text-slate-400" />
-            <input ref={searchInputRef} data-testid="map-poi-search" value={keywords} onChange={(event) => setKeywords(event.target.value)} placeholder="在地图上搜索地点…" className="min-w-0 flex-1 bg-transparent text-xs outline-none" />
+      <div className="absolute left-3 right-3 top-3 z-40 max-w-md sm:right-16" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center rounded-2xl border border-white/50 bg-white/75 p-1 shadow-[0_2px_24px_-4px_rgba(0,0,0,0.10),0_0_0_1px_rgba(0,0,0,0.02)] backdrop-blur-xl">
+          {searchMode === 'poi' ? <form onSubmit={searchPoi} className="flex min-w-0 flex-1 items-center gap-1">
+            <Search size={15} className="ml-2.5 shrink-0 text-slate-300" />
+            <input ref={searchInputRef} data-testid="map-poi-search" value={keywords} onChange={(event) => setKeywords(event.target.value)} placeholder="在地图上搜索地点…" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-slate-300" />
             <input value={region} onChange={(event) => setRegion(event.target.value)} placeholder="城市" className="hidden w-20 rounded-lg bg-slate-50 px-2 text-[11px] outline-none sm:block" />
-            <button disabled={busy} className="rounded-xl bg-blue-600 px-3 text-xs font-bold text-white disabled:opacity-50">搜索</button>
-          </form> : <form onSubmit={resolveShare} className="flex min-w-0 flex-1 gap-1.5">
-            <Link2 size={16} className="ml-2 mt-2 shrink-0 text-slate-400" />
-            <input value={shareUrl} onChange={(event) => setShareUrl(event.target.value)} placeholder="粘贴高德或百度地图分享链接…" className="min-w-0 flex-1 bg-transparent text-xs outline-none" />
-            <button disabled={busy} className="rounded-xl bg-blue-600 px-3 text-xs font-bold text-white disabled:opacity-50">解析</button>
+            <button disabled={busy} className="rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm shadow-blue-500/25 disabled:opacity-50 active:scale-[0.97] transition-all">搜索</button>
+          </form> : <form onSubmit={resolveShare} className="flex min-w-0 flex-1 items-center gap-1">
+            <Link2 size={15} className="ml-2.5 shrink-0 text-slate-300" />
+            <input value={shareUrl} onChange={(event) => setShareUrl(event.target.value)} placeholder="粘贴高德或百度地图分享链接…" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-slate-300" />
+            <button disabled={busy} className="rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm shadow-blue-500/25 disabled:opacity-50 active:scale-[0.97] transition-all">解析</button>
           </form>}
-          <button type="button" onClick={() => { setSearchMode((current) => current === 'poi' ? 'share' : 'poi'); setPois([]); }} className="ml-1 rounded-xl p-2 text-slate-500 hover:bg-slate-100" title={searchMode === 'poi' ? '粘贴地图分享链接' : '搜索高德地点'}>{searchMode === 'poi' ? <Link2 size={16} /> : <Search size={16} />}</button>
-          <button type="button" onClick={() => { setMessage('请在地图目标位置双击，随后可拖动蓝色标记微调。'); searchInputRef.current?.blur(); }} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100" title="手动地图选点"><MapPin size={16} /></button>
+          <button type="button" onClick={() => { setSearchMode((current) => current === 'poi' ? 'share' : 'poi'); setPois([]); }} className="ml-0.5 rounded-xl p-2 text-slate-400 hover:bg-slate-100/80 hover:text-slate-600 active:scale-95 transition-all" title={searchMode === 'poi' ? '粘贴地图分享链接' : '搜索高德地点'}>{searchMode === 'poi' ? <Link2 size={15} /> : <Search size={15} />}</button>
+          <button type="button" onClick={() => { setMessage('请在地图目标位置双击，随后可拖动蓝色标记微调。'); searchInputRef.current?.blur(); }} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100/80 hover:text-slate-600 active:scale-95 transition-all" title="手动地图选点"><MapPin size={15} /></button>
         </div>
 
-        {searchSlot && <div className="mt-1.5" onClick={(event) => event.stopPropagation()}>{searchSlot}</div>}
+        {searchSlot && <div className="mt-2" onClick={(event) => event.stopPropagation()}>{searchSlot}</div>}
 
         {pois.length > 0 && <div data-testid="map-poi-results" className="mt-2 max-h-64 overflow-y-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-xl">
           {pois.map((poi) => <button key={poi.id} type="button" onClick={() => choosePoi(poi)} className="flex w-full items-start gap-2 rounded-xl p-2.5 text-left hover:bg-blue-50">
@@ -653,6 +852,7 @@ export default function MapContainer({
             <input required value={draft.name ?? ''} onChange={(event) => updateDraft('name', event.target.value)} placeholder="地点名称" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs outline-none focus:border-blue-400" />
             <button type="button" onClick={() => setDraftExpanded(true)} className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-200">展开</button>
             <button disabled={busy} type="submit" className="shrink-0 flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"><Check size={13} />保存</button>
+            {editingId && <button type="button" onClick={() => void deletePlace({ id: editingId, name: draft.name ?? '' })} title="删除地点" className="shrink-0 rounded-lg bg-red-50 p-2 text-red-500 hover:bg-red-100 active:scale-95 transition-all"><Trash2 size={14} /></button>}
             <button type="button" onClick={() => { setDraft(null); setEditingId(null); setMessage(''); endPhotoMode(); }} className="shrink-0 rounded-lg bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"><X size={14} /></button>
           </div>
         ) : (
@@ -677,6 +877,7 @@ export default function MapContainer({
         </div>
         {message && <p className="mt-2 text-[10px] font-semibold text-amber-600">{message}</p>}
         <button disabled={busy} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-3 text-xs font-bold text-white disabled:opacity-50"><Check size={15} />{editingId ? '保存修改' : '保存并生成标记'}</button>
+        {editingId && <button type="button" onClick={() => void deletePlace({ id: editingId, name: draft.name ?? '' })} disabled={busy} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 py-2.5 text-xs font-bold text-red-600 disabled:opacity-50 active:scale-[0.99] transition-all"><Trash2 size={14} />删除此地点</button>}
           </>
         )}
       </form>}

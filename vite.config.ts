@@ -4,6 +4,11 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  const allowedHosts = (process.env.VITE_ALLOWED_HOSTS ?? '')
+    .split(',')
+    .map((host) => host.trim())
+    .filter(Boolean);
+
   return {
     plugins: [react(), tailwindcss()],
     build: {
@@ -16,6 +21,7 @@ export default defineConfig(() => {
       },
     },
     server: {
+      ...(allowedHosts.length ? { allowedHosts } : {}),
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

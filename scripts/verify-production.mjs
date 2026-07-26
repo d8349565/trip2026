@@ -72,7 +72,7 @@ try {
   const authenticatedHeaders = { Cookie: cookie };
 
   const placesBefore = await fetch(`http://127.0.0.1:${port}/api/places`, { headers: authenticatedHeaders }).then((result) => result.json());
-  assert.equal(placesBefore.length, 5);
+  assert.equal(placesBefore.length, 0);
   const createdPlaceResponse = await fetch(`http://127.0.0.1:${port}/api/places`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authenticatedHeaders },
@@ -86,7 +86,7 @@ try {
   });
   assert.equal(createdPlaceResponse.status, 200);
   const createdPlace = await createdPlaceResponse.json();
-  assert.equal((await fetch(`http://127.0.0.1:${port}/api/places`, { headers: authenticatedHeaders }).then((result) => result.json())).length, 6);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/places`, { headers: authenticatedHeaders }).then((result) => result.json())).length, 1);
   assert.equal((await fetch(`http://127.0.0.1:${port}/api/places/${createdPlace.id}`, {
     method: 'DELETE',
     headers: authenticatedHeaders,

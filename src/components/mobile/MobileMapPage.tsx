@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Media, Place, PlaceCategory } from '../../types';
 import MapContainer from '../MapContainer';
 import MobilePlaceMiniCard from './MobilePlaceMiniCard';
-import { Search, SlidersHorizontal, MapPin, Navigation, List, Plus, X, Heart, ShieldAlert, Sparkles, Calendar } from 'lucide-react';
+import { MapPin, X, Heart, Sparkles, LayoutList, MapPinPlus, Waves, Mountain, UtensilsCrossed, LayoutGrid, Crosshair } from 'lucide-react';
 
 interface MobileMapPageProps {
   places: Place[];
@@ -49,6 +49,7 @@ export default function MobileMapPage({
   const [activeCategory, setActiveCategory] = useState<string>(''); // empty means all
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [showListView, setShowListView] = useState(false);
+  const [locateRequest, setLocateRequest] = useState(0);
 
   // States from Filter sheet
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('');
@@ -78,23 +79,13 @@ export default function MobileMapPage({
     return true;
   });
 
-  // Hot Categories for the streamlined category bar
-  // "全部", "溯溪", "景点", "美食", "更多"
   const hotCategories = [
-    { key: '', label: '全部', icon: <SlidersHorizontal size={13} /> },
-    { key: 'stream', label: '溯溪', icon: <Navigation size={13} className="rotate-90" /> },
-    { key: 'scenic', label: '景点', icon: <MapPin size={13} /> },
-    { key: 'food', label: '美食', icon: <Search size={13} /> },
+    { key: '', label: '全部', icon: <LayoutGrid size={14} /> },
+    { key: 'stream', label: '溯溪', icon: <Waves size={14} /> },
+    { key: 'scenic', label: '景点', icon: <Mountain size={14} /> },
+    { key: 'food', label: '美食', icon: <UtensilsCrossed size={14} /> },
   ];
 
-  const handleResetMapPosition = () => {
-    // Focus the first place if any, or trigger sample alert
-    if (filteredPlaces.length > 0) {
-      onSelectPlace(filteredPlaces[0]);
-    } else {
-      onSelectPlace(null);
-    }
-  };
 
   return (
     <div className="flex-1 h-full w-full relative flex flex-col overflow-hidden select-none">
@@ -113,11 +104,12 @@ export default function MobileMapPage({
           editRequest={editRequest}
           photoDraft={photoDraft}
           onPhotoDraftEnd={onPhotoDraftEnd}
+          locateRequest={locateRequest}
           categoryColors={categoryColors}
           categoryLabels={categoryLabels}
           categoryIcons={categoryIcons}
           searchSlot={
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none" onClick={(e) => e.stopPropagation()}>
               {hotCategories.map(cat => {
                 const isActive = activeCategory === cat.key;
                 return (
@@ -125,13 +117,13 @@ export default function MobileMapPage({
                     key={cat.key}
                     id={`m_cat_${cat.key || 'all'}`}
                     onClick={() => { setActiveCategory(cat.key); onSelectPlace(null); }}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap border transition-all flex items-center gap-1 shrink-0 outline-none ${
+                    className={`px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border transition-all duration-200 flex items-center gap-1.5 shrink-0 outline-none active:scale-[0.96] ${
                       isActive
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
-                        : 'bg-white/90 border-slate-100 text-slate-500'
+                        ? 'bg-gradient-to-b from-blue-500 to-blue-600 border-transparent text-white shadow-md shadow-blue-500/25'
+                        : 'bg-white/70 border-white/50 text-slate-500 backdrop-blur-sm hover:bg-white/90 shadow-sm'
                     }`}
                   >
-                    <span className="flex items-center">{cat.icon}</span>
+                    {cat.icon}
                     <span>{cat.label}</span>
                   </button>
                 );
@@ -139,45 +131,48 @@ export default function MobileMapPage({
               <button
                 id="m_cat_more"
                 onClick={() => setShowFilterSheet(true)}
-                className="px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap border border-slate-100 bg-white/90 text-slate-500 outline-none shrink-0 flex items-center gap-1"
+                className="px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border border-white/50 bg-white/70 text-slate-500 backdrop-blur-sm outline-none shrink-0 flex items-center gap-1.5 shadow-sm hover:bg-white/90 active:scale-[0.96] transition-all duration-200"
               >
-                <Sparkles size={12} />
+                <Sparkles size={13} className="text-violet-400" />
                 <span>筛选</span>
+              </button>
+
+              <button
+                id="m_btn_toggle_list"
+                onClick={() => setShowListView(!showListView)}
+                className={`px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border outline-none shrink-0 flex items-center gap-1.5 active:scale-[0.96] transition-all duration-200 ${
+                  showListView
+                    ? 'bg-gradient-to-b from-blue-500 to-blue-600 border-transparent text-white shadow-md shadow-blue-500/25'
+                    : 'bg-white/70 border-white/50 text-slate-500 backdrop-blur-sm hover:bg-white/90 shadow-sm'
+                }`}
+              >
+                <LayoutList size={13} />
+                <span>列表</span>
+              </button>
+
+              <button
+                id="m_btn_locate"
+                onClick={() => setLocateRequest(Date.now())}
+                className="px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border border-white/50 bg-white/70 text-blue-600 backdrop-blur-sm outline-none shrink-0 flex items-center gap-1.5 shadow-sm hover:bg-white/90 active:scale-[0.96] transition-all duration-200"
+              >
+                <Crosshair size={13} />
+                <span>定位</span>
+              </button>
+
+              <button
+                id="m_btn_add_place"
+                onClick={onRequestEditor}
+                className="px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border border-transparent bg-gradient-to-b from-blue-500 to-blue-600 text-white outline-none shrink-0 flex items-center gap-1.5 shadow-md shadow-blue-500/25 active:scale-[0.96] transition-all duration-200"
+              >
+                <MapPinPlus size={13} />
+                <span>添加</span>
               </button>
             </div>
           }
         />
       </div>
 
-      {/* 4. Float Action Buttons (Aligned top-right but moved lower to not conflict with header) */}
-      <div className="absolute right-4 bottom-44 z-30 flex flex-col gap-2.5">
-        <button
-          id="m_btn_reset_pos"
-          onClick={handleResetMapPosition}
-          className="w-11 h-11 bg-white/95 backdrop-blur-md border border-slate-150/50 shadow-md rounded-xl flex items-center justify-center text-slate-600 hover:text-blue-600 active:scale-95 transition-all outline-none"
-          title="重置居中"
-        >
-          <Navigation size={18} className="rotate-45" />
-        </button>
-        
-        <button
-          id="m_btn_toggle_list"
-          onClick={() => setShowListView(!showListView)}
-          className="w-11 h-11 bg-white/95 backdrop-blur-md border border-slate-150/50 shadow-md rounded-xl flex items-center justify-center text-slate-600 hover:text-blue-600 active:scale-95 transition-all outline-none"
-          title="列表视图"
-        >
-          <List size={18} />
-        </button>
-
-        <button
-          id="m_btn_add_place"
-          onClick={onRequestEditor}
-          className="w-11 h-11 bg-blue-600 text-white shadow-md rounded-xl flex items-center justify-center hover:bg-blue-700 active:scale-95 transition-all outline-none"
-          title="录入或管理地点"
-        >
-          <Plus size={20} strokeWidth={2.5} />
-        </button>
-      </div>
+      {/* 4. No floating map controls — actions live in the category bar above */}
 
       {/* 5. Miniature Place Card (when place is selected) */}
       {selectedPlace && (

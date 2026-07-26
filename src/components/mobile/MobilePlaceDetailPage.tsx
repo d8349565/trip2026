@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Place, PlaceCategory, Trip, TripDay, Media, Visit, Guide } from '../../types';
+import { Place, PlaceCategory, Trip, TripDay, Media, Visit, Guide, type MediaUploadInput } from '../../types';
 import MobileAddPlaceToTripSheet from './MobileAddPlaceToTripSheet';
+import { photoLocationFields, preparePhotoForUpload } from '../../utils/photoUpload';
 import { 
   Heart, Star, MapPin, X, ImageIcon, Clock, BookOpen, 
   DollarSign, Compass, Calendar, Check, User, Plus, 
@@ -17,7 +18,7 @@ interface MobilePlaceDetailPageProps {
   onBack: () => void;
   onToggleFavorite: (id: string) => void;
   onAddToTrip: (placeId: string, tripDayId: string, type: string, time: string, note: string) => void;
-  onUploadPhoto?: (photoData: { filename: string; file_size: number; dataUrl: string; place_id: string }) => Promise<unknown>;
+  onUploadPhoto?: (photoData: MediaUploadInput & { place_id: string }) => Promise<unknown>;
   onCreateVisit?: (visit: Partial<Visit>) => Promise<void>;
   onEditPlace?: (place: Place) => void;
   categoryColors: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }>;
@@ -101,18 +102,16 @@ export default function MobilePlaceDetailPage({
     if (!file || !onUploadPhoto) return;
     setIsUploading(true);
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const dataUrl = reader.result as string;
-        await onUploadPhoto({
-          filename: file.name,
-          file_size: file.size,
-          dataUrl,
-          place_id: place.id
-        });
-        setIsUploading(false);
-      };
-      reader.readAsDataURL(file);
+      const prepared = await preparePhotoForUpload(file);
+      await onUploadPhoto({
+        filename: prepared.fileName,
+        file_size: prepared.fileSize,
+        dataUrl: prepared.dataUrl,
+        place_id: place.id,
+        captured_at: prepared.exif.capturedAt,
+        ...photoLocationFields(prepared.exif),
+      });
+      setIsUploading(false);
     } catch (err) {
       alert('上传失败');
       setIsUploading(false);

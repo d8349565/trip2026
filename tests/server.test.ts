@@ -7,6 +7,7 @@ import test from 'node:test';
 const dataPath = fs.mkdtempSync(path.join(os.tmpdir(), 'travel-footprint-server-'));
 process.env.NODE_ENV = 'test';
 process.env.APP_DATA_DIR = dataPath;
+process.env.APP_UPLOADS_DIR = path.join(dataPath, 'uploads');
 process.env.SESSION_SECRET = 'test-session-secret-with-at-least-32-characters';
 
 function cookieFrom(response: Response): string {
@@ -219,6 +220,41 @@ test('health, authentication, session rotation, and API guards work', async (con
   assert.equal(placeAfterStateEdits.favorite, true);
   assert.equal(placeAfterStateEdits.status, 'visited');
   assert.equal(placeAfterStateEdits.summary, 'Updated after favorite toggle');
+
+  const mediaUploadResponse = await fetch(`${baseUrl}/api/media/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: loginCookie },
+    body: JSON.stringify({
+      filename: 'browser-location.jpg',
+      file_size: 10,
+      dataUrl: `data:image/jpeg;base64,${Buffer.from('test-photo').toString('base64')}`,
+      latitude: 30.2741,
+      longitude: 120.1551,
+      coordinate_system: 'WGS84',
+      location_source: 'browser',
+      location_accuracy_m: 24,
+      location_observed_at: '2026-07-26T08:00:00.000Z',
+    }),
+  });
+  assert.equal(mediaUploadResponse.status, 200);
+  const uploadedMedia = await mediaUploadResponse.json();
+  assert.equal(uploadedMedia.location_source, 'browser');
+  assert.equal(uploadedMedia.location_accuracy_m, 24);
+  assert.equal(uploadedMedia.source_latitude, 30.2741);
+  assert.equal(uploadedMedia.exif_latitude, undefined);
+  assert.notEqual(uploadedMedia.display_longitude, 120.1551);
+
+  const invalidMediaLocationResponse = await fetch(`${baseUrl}/api/media/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: loginCookie },
+    body: JSON.stringify({
+      filename: 'invalid-location.jpg',
+      dataUrl: `data:image/jpeg;base64,${Buffer.from('invalid-photo').toString('base64')}`,
+      latitude: 30.2741,
+    }),
+  });
+  assert.equal(invalidMediaLocationResponse.status, 400);
+  assert.equal((await invalidMediaLocationResponse.json()).error.code, 'INVALID_MEDIA_LOCATION');
 
   const invalidTripResponse = await fetch(`${baseUrl}/api/trips`, {
     method: 'POST',

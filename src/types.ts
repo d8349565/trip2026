@@ -174,6 +174,12 @@ export interface Media {
   captured_at?: string;
   exif_latitude?: number;
   exif_longitude?: number;
+  source_latitude?: number;
+  source_longitude?: number;
+  source_coordinate_system?: 'WGS84' | 'GCJ02';
+  location_source?: 'exif' | 'xmp' | 'browser' | 'manual';
+  location_accuracy_m?: number;
+  location_observed_at?: string;
   display_latitude?: number;
   display_longitude?: number;
   place_id?: string;
@@ -182,6 +188,24 @@ export interface Media {
   favorite: boolean;
   visibility: 'private' | 'shared';
   created_at: string;
+}
+
+export interface MediaUploadInput {
+  filename: string;
+  file_size: number;
+  dataUrl: string;
+  place_id?: string;
+  trip_id?: string;
+  captured_at?: string;
+  /** 兼容旧调用方；新调用方优先使用 latitude/longitude。 */
+  lat?: number;
+  lng?: number;
+  latitude?: number;
+  longitude?: number;
+  coordinate_system?: 'WGS84' | 'GCJ02';
+  location_source?: 'exif' | 'xmp' | 'browser' | 'manual';
+  location_accuracy_m?: number;
+  location_observed_at?: string;
 }
 
 // Guide Types

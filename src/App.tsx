@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Place, PlaceCategory, Trip, TripDay, TripItem, Guide, Checklist, ChecklistItem, Media, User, InviteCode, Visit } from './types';
+import { Place, PlaceCategory, Trip, TripDay, TripItem, Guide, Checklist, ChecklistItem, Media, User, InviteCode, Visit, type MediaUploadInput } from './types';
 import { api } from './api';
 
 // Components
@@ -502,7 +502,7 @@ export default function App() {
   };
 
   // Media
-  const handleUploadMedia = async (data: any): Promise<Media | undefined> => {
+  const handleUploadMedia = async (data: MediaUploadInput): Promise<Media | undefined> => {
     try {
       const created = await api.uploadMedia(data, currentUser?.id);
       await reloadAllData();
@@ -545,6 +545,18 @@ export default function App() {
       console.error('自动创建照片地点失败', error);
       // 兜底：自动建点失败时退回手动流程
       handleCreatePlaceFromPhoto(seed);
+    }
+  };
+
+  // 把照片并入一个已有地点：仅更新媒体归属，不新建地点。
+  const handleLinkPhotoToPlace = async (mediaId: string, placeId: string) => {
+    try {
+      await api.updateMedia(mediaId, { place_id: placeId });
+      setMedia((current) => current.map((item) => item.id === mediaId ? { ...item, place_id: placeId } : item));
+      setPendingPhotoDraft(null);
+    } catch (error) {
+      console.error('照片关联已有地点失败', error);
+      alert('关联失败，请重试');
     }
   };
 
@@ -817,7 +829,7 @@ export default function App() {
               onToggleFavorite={handleToggleFavoriteMedia}
               onSelectPhoto={(photo) => setMobileSelectedPhoto(photo)}
               onCreatePlaceFromPhoto={handleCreatePlaceFromPhoto}
-              onAutoCreatePlaceFromPhoto={handleAutoCreatePlaceFromPhoto}
+              onLinkPhotoToPlace={handleLinkPhotoToPlace}
             />
           )}
 

@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { IMAGE_PLACEHOLDER, Place, Trip, TripDay, Media, Guide, TripItem, Visit } from '../types';
+import { IMAGE_PLACEHOLDER, Place, Trip, TripDay, Media, Guide, TripItem, Visit, type MediaUploadInput } from '../types';
+import { photoLocationFields, preparePhotoForUpload } from '../utils/photoUpload';
 import { 
   Heart, CheckSquare, Star, MapPin, AlertTriangle, Lightbulb, 
   Layers, ChevronRight, X, Image as ImageIcon, Sparkles, Clock, 
@@ -29,7 +30,7 @@ interface PlaceDetailPaneProps {
   onNavigateToView?: (view: 'map' | 'trip' | 'photos' | 'checklist' | 'guide', id?: string) => void;
   onCreateVisit?: (visit: Partial<Visit>) => Promise<void>; // added
   onCreateGuide?: (guide: Partial<Guide>) => Promise<void>; // added
-  onUploadPhoto?: (photoData: { filename: string; file_size: number; dataUrl: string; place_id: string }) => Promise<unknown>; // added
+  onUploadPhoto?: (photoData: MediaUploadInput & { place_id: string }) => Promise<unknown>; // added
   onEditPlace?: (place: Place) => void;
   onSetCover?: (placeId: string, photoUrl: string) => void;
 }
@@ -207,7 +208,7 @@ export default function PlaceDetailPane({
   };
 
   // Physical Photo File Handler
-  const handlePhotoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
@@ -215,20 +216,18 @@ export default function PlaceDetailPane({
       return;
     }
     setFileError('');
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const dataUrl = reader.result as string;
-      triggerPhotoUpload(file.name, file.size, dataUrl);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Trigger base64 upload to server
-  const triggerPhotoUpload = async (filename: string, size: number, dataUrl: string) => {
-    if (!onUploadPhoto) return;
     setUploadProgress(true);
     try {
-      await onUploadPhoto({ filename, file_size: size, dataUrl, place_id: place.id });
+      const prepared = await preparePhotoForUpload(file);
+      if (!onUploadPhoto) return;
+      await onUploadPhoto({
+        filename: prepared.fileName,
+        file_size: prepared.fileSize,
+        dataUrl: prepared.dataUrl,
+        place_id: place.id,
+        captured_at: prepared.exif.capturedAt,
+        ...photoLocationFields(prepared.exif),
+      });
       setShowPhotoForm(false);
     } catch (err) {
       setFileError('上传失败，请重新尝试');

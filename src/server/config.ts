@@ -36,7 +36,7 @@ export const config = Object.freeze({
   host: process.env.APP_HOST?.trim() || '127.0.0.1',
   port: readPort(process.env.APP_PORT),
   clientDistPath: path.resolve(process.cwd(), 'dist', 'client'),
-  uploadsPath: path.resolve(process.cwd(), 'uploads'),
+  uploadsPath: path.resolve(process.cwd(), process.env.APP_UPLOADS_DIR?.trim() || 'uploads'),
   dataPath,
   databasePath: path.join(dataPath, 'travel-footprint.sqlite'),
   migrationsPath: path.resolve(process.cwd(), 'migrations'),

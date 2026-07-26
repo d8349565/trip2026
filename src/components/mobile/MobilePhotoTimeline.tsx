@@ -1,19 +1,23 @@
-import React, { useState } from 'react';
-import { Media, Place } from '../../types';
+import React, { useState, useMemo } from 'react';
+import { Media, Place, type MediaUploadInput } from '../../types';
 import { api } from '../../api';
-import { preparePhotoForUpload } from '../../utils/photoUpload';
+import { describeBrowserLocationFailure } from '../../utils/browserLocation';
+import { photoLocationFields, preparePhotoForUpload } from '../../utils/photoUpload';
 import { CATEGORY_OPTIONS } from '../../utils/categories';
-import { Clock, Image as ImageIcon, Heart, Trash2, Calendar, Grid, BookOpen, Plus, Camera, MapPin, X } from 'lucide-react';
+import { Clock, Image as ImageIcon, Heart, Trash2, Calendar, Grid, BookOpen, Plus, Camera, MapPin, X, Search, ChevronRight, CheckCircle2, Link2 } from 'lucide-react';
+
+const CATEGORY_EMOJI: Record<string, string> = Object.fromEntries(CATEGORY_OPTIONS.map((c) => [c.id, c.emoji]));
+const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(CATEGORY_OPTIONS.map((c) => [c.id, c.label]));
 
 interface MobilePhotoTimelineProps {
   media: Media[];
   places: Place[];
-  onUploadPhoto: (photoData: { filename: string; file_size: number; dataUrl: string; place_id?: string; captured_at?: string; lat?: number; lng?: number }) => Promise<Media | void> | Promise<void>;
+  onUploadPhoto: (photoData: MediaUploadInput) => Promise<Media | void> | Promise<void>;
   onDeletePhoto: (id: string) => void;
   onToggleFavorite: (id: string, fav: boolean) => void;
   onSelectPhoto: (photo: Media) => void;
   onCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => void;
-  onAutoCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string; category_id?: string }) => void;
+  onLinkPhotoToPlace: (mediaId: string, placeId: string) => Promise<void> | void;
 }
 
 export default function MobilePhotoTimeline({
@@ -24,15 +28,26 @@ export default function MobilePhotoTimeline({
   onToggleFavorite,
   onSelectPhoto,
   onCreatePlaceFromPhoto,
-  onAutoCreatePlaceFromPhoto,
+  onLinkPhotoToPlace,
 }: MobilePhotoTimelineProps) {
   const [viewMode, setViewMode] = useState<'timeline' | 'grid'>('timeline');
   const [uploadPlaceId, setUploadPlaceId] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [photoPrompt, setPhotoPrompt] = useState<{ mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string; recognized: boolean } | null>(null);
-  // 照片带 GPS 时，先让用户选地点类型再自动建点
-  const [pendingCategorySeed, setPendingCategorySeed] = useState<{ mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string } | null>(null);
+  const [photoPrompt, setPhotoPrompt] = useState<{ mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string; recognized: boolean; hint?: string } | null>(null);
+  const [showLinkSheet, setShowLinkSheet] = useState(false);
+  const [linkQuery, setLinkQuery] = useState('');
+  const [justLinked, setJustLinked] = useState<string | null>(null);
+
+  // 可并入的已有地点：按搜索词过滤，收藏优先，便于快速定位
+  const linkablePlaces = useMemo(() => {
+    const q = linkQuery.trim().toLowerCase();
+    const list = q
+      ? places.filter((p) => p.name.toLowerCase().includes(q) || (p.address || '').toLowerCase().includes(q))
+      : places.slice();
+    list.sort((a, b) => Number(b.favorite) - Number(a.favorite));
+    return list;
+  }, [places, linkQuery]);
 
   // Group photos for timeline: Date -> Place -> Photos List
   const groupedTimeline: Record<string, Record<string, Media[]>> = {};
@@ -59,22 +74,24 @@ export default function MobilePhotoTimeline({
     groupedTimeline[dateStr][placeName].push(item);
   });
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    allowBrowserLocationFallback = false,
+  ) => {
     const file = e.target.files?.[0];
     if (!file || isUploading) return;
     setIsUploading(true);
     try {
       // Read EXIF from the original file, then compress so the payload stays
       // under the server's 10 MB JSON limit (raw phone photos exceed it).
-      const prepared = await preparePhotoForUpload(file);
+      const prepared = await preparePhotoForUpload(file, { allowBrowserLocationFallback });
       const created = await onUploadPhoto({
         filename: prepared.fileName,
         file_size: prepared.fileSize,
         dataUrl: prepared.dataUrl,
         place_id: uploadPlaceId || undefined,
         captured_at: prepared.exif.capturedAt,
-        lat: prepared.exif.latitude,
-        lng: prepared.exif.longitude
+        ...photoLocationFields(prepared.exif),
       });
 
       // 上传后未手动关联地点：有 GPS 就自动建标记，无 GPS 才引导手动选点。
@@ -89,15 +106,21 @@ export default function MobilePhotoTimeline({
           } catch {
             // 坐标仍可用，自动建点时名称会回退为「照片拍摄点」。
           }
-          // 先弹出分类选择，用户确认后再自动建点
-          setPendingCategorySeed({ mediaId: created.id, latitude: created.display_latitude, longitude: created.display_longitude, name, address });
+          // 有 GPS 也先让用户去地图确认/微调位置，确认保存后才真正建点（避免 GPS 偏差直接落库）
+          setPhotoPrompt({ mediaId: created.id, latitude: created.display_latitude, longitude: created.display_longitude, name, address, recognized: true });
         } else {
-          setPhotoPrompt({ mediaId: created.id, recognized: false });
+          setPhotoPrompt({
+            mediaId: created.id,
+            recognized: false,
+            hint: prepared.exif.locationFailure
+              ? describeBrowserLocationFailure(prepared.exif.locationFailure)
+              : undefined,
+          });
         }
       }
       setShowUploadModal(false);
     } catch (err) {
-      alert('上传失败');
+      alert(err instanceof Error ? err.message : '上传失败');
     } finally {
       setIsUploading(false);
     }
@@ -112,17 +135,18 @@ export default function MobilePhotoTimeline({
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold text-blue-800 leading-snug">
               {photoPrompt.recognized
-                ? `已识别拍摄地点：${photoPrompt.address || '地图位置'}。是否为这里创建标记点？`
+                ? `已识别拍摄地点：${photoPrompt.name || photoPrompt.address || '地图位置'}。GPS 可能有几十米偏差，去地图确认位置后再创建标记。`
                 : (
                   <>
                     这张照片未检测到位置信息，可以手动选点创建标记。
                     <span className="mt-1 block text-[10px] font-medium text-blue-500/90 leading-snug">
-                      常见原因：手机系统分享照片时会抹掉位置（小米：相册设置 → 隐私保护 → 关闭「去除位置信息」）；微信内置浏览器上传也会抹掉。建议改用「拍照上传」。
+                      {photoPrompt.hint || '常见原因：系统照片选择器或分享应用抹掉了位置元数据。可改用「拍照上传」，或在地图上手动选点。'}
                     </span>
                   </>
                 )}
             </p>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="mt-2 space-y-1.5">
+              <div className="flex items-center gap-2">
               <button
                 data-testid="photo-place-create"
                 onClick={() => {
@@ -135,18 +159,36 @@ export default function MobilePhotoTimeline({
                   });
                   setPhotoPrompt(null);
                 }}
-                className="rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white active:scale-95 transition-all"
+                className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-bold text-white active:scale-95 transition-all"
               >
-                {photoPrompt.recognized ? '去创建标记' : '去地图选点'}
+                <MapPin size={13} />
+                {photoPrompt.recognized ? '去确认位置' : '去地图选点'}
               </button>
               <button
-                onClick={() => setPhotoPrompt(null)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-500"
+                onClick={() => setShowLinkSheet(true)}
+                className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-[11px] font-bold text-blue-600 active:scale-95 transition-all"
               >
-                忽略
+                <Link2 size={13} />
+                关联已有地点
+              </button>
+              </div>
+              <button
+                onClick={() => setPhotoPrompt(null)}
+                className="w-full rounded-lg px-3 py-1 text-[10px] font-bold text-slate-400 active:scale-95 transition-all"
+              >
+                忽略，暂不处理
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 并入成功反馈 */}
+      {justLinked && (
+        <div className="flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-3.5 py-2.5 animate-fade-in">
+          <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />
+          <p className="min-w-0 flex-1 truncate text-[11px] font-bold text-emerald-800">照片已并入「{justLinked}」</p>
+          <button onClick={() => setJustLinked(null)} className="shrink-0 rounded-full p-1 text-emerald-500 active:scale-90"><X size={13} /></button>
         </div>
       )}
 
@@ -307,7 +349,7 @@ export default function MobilePhotoTimeline({
                     accept="image/*"
                     capture="environment"
                     className="hidden"
-                    onChange={handleFileChange}
+                    onChange={(event) => void handleFileChange(event, true)}
                     disabled={isUploading}
                   />
                 </label>
@@ -319,7 +361,7 @@ export default function MobilePhotoTimeline({
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={handleFileChange}
+                    onChange={(event) => void handleFileChange(event, false)}
                     disabled={isUploading}
                   />
                 </label>
@@ -329,36 +371,77 @@ export default function MobilePhotoTimeline({
         </div>
       )}
 
-      {/* CATEGORY PICKER — 照片带 GPS 时先选地点类型再自动建点（底部弹层） */}
-      {pendingCategorySeed && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end animate-fade-in" onClick={() => {
-          onAutoCreatePlaceFromPhoto({ ...pendingCategorySeed, category_id: 'scenic' });
-          setPendingCategorySeed(null);
-        }}>
-          <div className="w-full bg-white rounded-t-3xl p-5 pb-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
-            <h4 className="font-extrabold text-slate-800 text-sm">📍 这是什么类型的地点？</h4>
-            <p className="mt-1.5 text-[11px] text-slate-500 leading-relaxed">
-              已识别拍摄位置：<span className="font-bold text-slate-700">{pendingCategorySeed.name || pendingCategorySeed.address || '地图位置'}</span>。选择分类后自动在地图建立标记。
-            </p>
-            <div className="mt-4 grid grid-cols-4 gap-2">
-              {CATEGORY_OPTIONS.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => {
-                    onAutoCreatePlaceFromPhoto({ ...pendingCategorySeed, category_id: cat.id });
-                    setPendingCategorySeed(null);
-                  }}
-                  className="flex flex-col items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 py-2.5 transition-all active:scale-95 active:border-blue-400 active:bg-blue-50"
-                >
-                  <span className="text-xl">{cat.emoji}</span>
-                  <span className="text-[10px] font-bold text-slate-700">{cat.label}</span>
-                </button>
-              ))}
+      {/* 关联到已有地点 — 底部选择面板 */}
+      {showLinkSheet && photoPrompt && (
+        <div className="fixed inset-0 z-50 flex items-end bg-slate-900/60 backdrop-blur-xs animate-fade-in" onClick={() => { setShowLinkSheet(false); setLinkQuery(''); }}>
+          <div className="flex max-h-[82vh] w-full flex-col rounded-t-3xl bg-white shadow-2xl animate-slide-up" onClick={(e) => e.stopPropagation()}>
+            <div className="shrink-0 px-5 pb-3 pt-3">
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-black text-slate-800">关联到已有地点</h4>
+                  <p className="mt-0.5 text-[11px] leading-snug text-slate-500">选择这张照片所属的地点，照片将并入该地点的相册。</p>
+                </div>
+                <button onClick={() => { setShowLinkSheet(false); setLinkQuery(''); }} className="shrink-0 rounded-full bg-slate-100 p-2 text-slate-500 active:scale-90"><X size={15} /></button>
+              </div>
+              <div className="mt-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <Search size={15} className="shrink-0 text-slate-400" />
+                <input value={linkQuery} onChange={(e) => setLinkQuery(e.target.value)} placeholder="搜索地点名称或地址" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-slate-300" />
+              </div>
+            </div>
+            <div className="flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
+              {places.length === 0 ? (
+                <div className="py-10 text-center"><MapPin size={28} className="mx-auto text-slate-300" /><p className="mt-2 text-[11px] text-slate-400">还没有任何地点，去地图新建一个吧</p></div>
+              ) : linkablePlaces.length === 0 ? (
+                <div className="py-10 text-center"><Search size={24} className="mx-auto text-slate-300" /><p className="mt-2 text-[11px] text-slate-400">没有匹配「{linkQuery}」的地点</p></div>
+              ) : (
+                linkablePlaces.map((p) => {
+                  const count = media.filter((m) => m.place_id === p.id).length;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        onLinkPhotoToPlace(photoPrompt.mediaId, p.id);
+                        setJustLinked(p.name);
+                        setPhotoPrompt(null);
+                        setShowLinkSheet(false);
+                        setLinkQuery('');
+                      }}
+                      className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-2.5 text-left transition-all active:scale-[0.99] active:border-blue-300 active:bg-blue-50/50"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-slate-50 text-lg">{CATEGORY_EMOJI[p.category_id] ?? '📍'}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-bold text-slate-800">{p.name}</span>
+                        <span className="mt-0.5 block truncate text-[10px] text-slate-400">{CATEGORY_LABEL[p.category_id] ? `${CATEGORY_LABEL[p.category_id]} · ` : ''}{p.address || '暂无地址'}</span>
+                      </span>
+                      <span className="flex shrink-0 flex-col items-end gap-0.5">
+                        {p.favorite && <Heart size={12} className="fill-amber-400 text-amber-400" />}
+                        <span className="text-[10px] font-bold text-slate-400">{count} 张</span>
+                      </span>
+                      <ChevronRight size={16} className="shrink-0 text-slate-300" />
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            <div className="shrink-0 border-t border-slate-100 px-3 pb-4 pt-3">
+              <button
+                onClick={() => {
+                  const seed = photoPrompt;
+                  setShowLinkSheet(false);
+                  setLinkQuery('');
+                  setPhotoPrompt(null);
+                  onCreatePlaceFromPhoto({ mediaId: seed.mediaId, latitude: seed.latitude, longitude: seed.longitude, name: seed.name, address: seed.address });
+                }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 py-2.5 text-[12px] font-bold text-blue-600 transition-all active:scale-[0.99]"
+              >
+                <Plus size={15} /> 没找到？去地图新建标记
+              </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

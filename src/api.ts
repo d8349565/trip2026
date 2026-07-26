@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Place, Trip, Guide, Checklist, Media, User, InviteCode } from './types';
+import { Place, Trip, Guide, Checklist, Media, User, InviteCode, type MediaUploadInput } from './types';
 
 const API_BASE = '';
 
@@ -303,7 +303,7 @@ export const api = {
     return res.json();
   },
 
-  uploadMedia: async (data: { filename: string; file_size: number; dataUrl: string; place_id?: string; trip_id?: string; captured_at?: string; lat?: number; lng?: number }, userId?: string): Promise<Media> => {
+  uploadMedia: async (data: MediaUploadInput, userId?: string): Promise<Media> => {
     const res = await fetch(`${API_BASE}/api/media/upload`, {
       method: 'POST',
       headers: {

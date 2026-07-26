@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Media, Place, Trip } from '../types';
+import { Media, Place, Trip, type MediaUploadInput } from '../types';
 import { api } from '../api';
 import { type PhotoExif } from '../utils/photoExif';
-import { preparePhotoForUpload } from '../utils/photoUpload';
+import { photoLocationFields, preparePhotoForUpload } from '../utils/photoUpload';
 import { CATEGORY_OPTIONS } from '../utils/categories';
 import {
   Camera, Trash2, Heart, Calendar, MapPin, UploadCloud, X,
@@ -18,7 +18,7 @@ interface PhotosGalleryProps {
   media: Media[];
   places: Place[];
   trips: Trip[];
-  onUploadMedia: (data: { filename: string; file_size: number; dataUrl: string; place_id?: string; trip_id?: string; captured_at?: string; lat?: number; lng?: number }) => Promise<Media | void> | void;
+  onUploadMedia: (data: MediaUploadInput) => Promise<Media | void> | void;
   onDeleteMedia: (id: string) => void;
   onToggleFavoriteMedia: (id: string, fav: boolean) => void;
   onCreatePlaceFromPhoto: (seed: { mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string }) => void;
@@ -141,11 +141,14 @@ export default function PhotosGallery({
   };
 
   // Handle local image file load & compress
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    allowBrowserLocationFallback = false,
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
     // Read EXIF from the original and compress via the shared pipeline.
-    const prepared = await preparePhotoForUpload(file);
+    const prepared = await preparePhotoForUpload(file, { allowBrowserLocationFallback });
     setFileName(prepared.fileName);
     setFileSize(prepared.fileSize);
     setPendingExif(prepared.exif);
@@ -179,8 +182,7 @@ export default function PhotosGallery({
         place_id: uploadPlaceId || undefined,
         trip_id: finalTripId || undefined,
         captured_at: new Date(uploadCapturedDate).toISOString(),
-        lat: pendingExif.latitude,
-        lng: pendingExif.longitude
+        ...photoLocationFields(pendingExif),
       });
 
       // 上传后未手动关联地点：有 GPS 就自动建标记，无 GPS 才引导手动选点。
@@ -663,7 +665,7 @@ export default function PhotosGallery({
                         type="file"
                         accept="image/*"
                         capture="environment"
-                        onChange={handleFileChange}
+                        onChange={(event) => void handleFileChange(event, true)}
                         className="hidden"
                       />
                     </label>
@@ -674,7 +676,7 @@ export default function PhotosGallery({
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={handleFileChange}
+                        onChange={(event) => void handleFileChange(event, false)}
                         className="hidden"
                       />
                     </label>
