@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Trip, TripDay, TripItem, Place } from '../../types';
 import { 
   Calendar, MapPin, Plus, Trash2, Edit2, Check, Clock, 
   Car, Compass, DollarSign, Cloud, CheckSquare, Sparkles, X 
 } from 'lucide-react';
+import { getDefaultTripDateRange, isValidTripDateRange } from '../../utils/tripDates';
 
 interface MobileTripOverviewPageProps {
   trips: Trip[];
@@ -11,6 +12,7 @@ interface MobileTripOverviewPageProps {
   allItems: TripItem[];
   places: Place[];
   activeTrip: Trip | null;
+  createTripRequest?: number;
   onSelectTrip: (tripId: string) => void;
   onDeleteTrip: (tripId: string) => void;
   onCreateTrip: (trip: Partial<Trip>) => void;
@@ -25,6 +27,7 @@ export default function MobileTripOverviewPage({
   allItems,
   places,
   activeTrip,
+  createTripRequest = 0,
   onSelectTrip,
   onDeleteTrip,
   onCreateTrip,
@@ -62,10 +65,11 @@ export default function MobileTripOverviewPage({
   const [newTitle, setNewTitle] = useState('');
   const [newOrigin, setNewOrigin] = useState('广州市');
   const [newDest, setNewDest] = useState('潮州市');
-  const [newStartDate, setNewStartDate] = useState('2026-07-13');
-  const [newEndDate, setNewEndDate] = useState('2026-07-15');
+  const [newStartDate, setNewStartDate] = useState(() => getDefaultTripDateRange().startDate);
+  const [newEndDate, setNewEndDate] = useState(() => getDefaultTripDateRange().endDate);
   const [newVehicle, setNewVehicle] = useState('自驾 SUV');
   const [newBudget, setNewBudget] = useState('2000');
+  const [dateError, setDateError] = useState('');
 
   const startEditingDay = () => {
     if (!activeDay) return;
@@ -109,6 +113,11 @@ export default function MobileTripOverviewPage({
   const handleCreateTripSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
+    if (!isValidTripDateRange(newStartDate, newEndDate)) {
+      setDateError('结束日期不能早于开始日期，请重新选择。');
+      return;
+    }
+    setDateError('');
     onCreateTrip({
       title: newTitle,
       origin: newOrigin,
@@ -123,6 +132,21 @@ export default function MobileTripOverviewPage({
     setNewTitle('');
     setShowCreateTripModal(false);
   };
+
+  const openCreateTripModal = () => {
+    const defaults = getDefaultTripDateRange();
+    setNewTitle('');
+    setNewStartDate(defaults.startDate);
+    setNewEndDate(defaults.endDate);
+    setDateError('');
+    setShowCreateTripModal(true);
+  };
+
+  useEffect(() => {
+    if (createTripRequest <= 0) return;
+    setSubTab('trips');
+    openCreateTripModal();
+  }, [createTripRequest]);
 
   return (
     <div className="space-y-4 select-none">
@@ -410,7 +434,7 @@ export default function MobileTripOverviewPage({
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">全部旅行路线规划清单 ({trips.length})</span>
             <button
               id="m_show_add_trip"
-              onClick={() => setShowCreateTripModal(true)}
+              onClick={openCreateTripModal}
               className="px-2.5 py-1 bg-blue-600 text-white rounded-lg text-[10px] font-black flex items-center gap-0.5 shadow-sm outline-none"
             >
               <Plus size={12} />
@@ -425,7 +449,7 @@ export default function MobileTripOverviewPage({
               <div className="relative w-full bg-white rounded-t-3xl shadow-2xl z-10 p-5 space-y-4 max-h-[80vh] overflow-y-auto animate-slide-up">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                   <h4 className="font-extrabold text-slate-800 text-sm">🎒 新建长途自驾探险行程</h4>
-                  <button onClick={() => setShowCreateTripModal(false)} className="p-1 rounded-full bg-slate-100 text-slate-500 outline-none">
+                  <button aria-label="关闭创建行程" onClick={() => setShowCreateTripModal(false)} className="p-1 rounded-full bg-slate-100 text-slate-500 outline-none">
                     <X size={16} />
                   </button>
                 </div>
@@ -469,6 +493,7 @@ export default function MobileTripOverviewPage({
                       <label className="text-[10px] font-bold text-slate-400">开始日期</label>
                       <input 
                         type="date" 
+                        aria-label="开始日期"
                         value={newStartDate}
                         onChange={e => setNewStartDate(e.target.value)}
                         className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none"
@@ -479,6 +504,8 @@ export default function MobileTripOverviewPage({
                       <label className="text-[10px] font-bold text-slate-400">结束日期</label>
                       <input 
                         type="date" 
+                        aria-label="结束日期"
+                        min={newStartDate}
                         value={newEndDate}
                         onChange={e => setNewEndDate(e.target.value)}
                         className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none"
@@ -486,6 +513,8 @@ export default function MobileTripOverviewPage({
                       />
                     </div>
                   </div>
+
+                  {dateError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-bold text-rose-700">{dateError}</p>}
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>

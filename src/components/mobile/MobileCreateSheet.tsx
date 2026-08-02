@@ -62,20 +62,21 @@ export default function MobileCreateSheet({ isOpen, onClose, onAction }: MobileC
   ];
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end animate-fade-in">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end animate-fade-in" role="presentation">
       {/* Background overlay click */}
       <div className="absolute inset-0" onClick={onClose}></div>
       
       {/* Sliding Sheet */}
-      <div className="relative w-full bg-white rounded-t-3xl shadow-2xl z-10 flex flex-col max-h-[85vh] animate-slide-up">
+      <div className="relative w-full bg-white rounded-t-3xl shadow-2xl z-10 flex flex-col max-h-[85vh] animate-slide-up" role="dialog" aria-modal="true" aria-labelledby="m-create-sheet-title">
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h3 className="font-extrabold text-slate-800 text-base">快捷新建与记录</h3>
+            <h3 id="m-create-sheet-title" className="font-extrabold text-slate-800 text-base">快捷新建与记录</h3>
             <p className="text-xs text-slate-400 mt-0.5">选择您想要在旅途中进行的操作</p>
           </div>
           <button 
             id="m_close_create_sheet"
+            aria-label="关闭快捷新建与记录"
             onClick={onClose}
             className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 active:scale-95 transition-all outline-none"
           >

@@ -9,6 +9,8 @@ import { api } from '../api';
 import { type PhotoExif } from '../utils/photoExif';
 import { photoLocationFields, preparePhotoForUpload } from '../utils/photoUpload';
 import { CATEGORY_OPTIONS } from '../utils/categories';
+import { formatMediaDate, getMediaDateKey, sortMediaByDateDesc } from '../utils/mediaTimeline';
+import { formatLocalDate } from '../utils/tripDates';
 import {
   Camera, Trash2, Heart, Calendar, MapPin, UploadCloud, X,
   Clock, Compass, Info, ZoomIn, Star, Filter, Image as ImageIcon
@@ -46,12 +48,13 @@ export default function PhotosGallery({
   // Upload state
   const [uploadPlaceId, setUploadPlaceId] = useState('');
   const [uploadTripId, setUploadTripId] = useState('');
-  const [uploadCapturedDate, setUploadCapturedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [uploadCapturedDate, setUploadCapturedDate] = useState(() => formatLocalDate(new Date()));
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const [fileSize, setFileSize] = useState(0);
   const [pendingExif, setPendingExif] = useState<PhotoExif>({});
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [photoPrompt, setPhotoPrompt] = useState<{ mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string; recognized: boolean } | null>(null);
   // 照片带 GPS 时，先让用户选地点类型再自动建点
   const [pendingCategorySeed, setPendingCategorySeed] = useState<{ mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string } | null>(null);
@@ -64,23 +67,17 @@ export default function PhotosGallery({
   }, [initialSelectedPlaceId]);
 
   // Filters logic
-  const filteredMedia = media
-    .filter(m => {
+  const filteredMedia = sortMediaByDateDesc(media.filter(m => {
       if (photoFilter === 'favorites' && !m.favorite) return false;
       if (selectedPlaceId && m.place_id !== selectedPlaceId) return false;
       if (selectedTripId && m.trip_id !== selectedTripId) return false;
       return true;
-    })
-    .sort((a, b) => {
-      const dateA = a.captured_at || a.created_at;
-      const dateB = b.captured_at || b.created_at;
-      return dateB.localeCompare(dateA); // Chronological descending (newest first)
-    });
+    }));
 
   // Group media by date
   const groupedMedia: Record<string, Media[]> = {};
   filteredMedia.forEach(photo => {
-    const dateStr = (photo.captured_at || photo.created_at).substring(0, 10);
+    const dateStr = getMediaDateKey(photo);
     if (!groupedMedia[dateStr]) {
       groupedMedia[dateStr] = [];
     }
@@ -90,16 +87,7 @@ export default function PhotosGallery({
   const sortedDates = Object.keys(groupedMedia).sort((a, b) => b.localeCompare(a));
 
   // Format Date for timeline node
-  const formatTimelineDate = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
-      const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
-      return `${months[d.getMonth()]}${d.getDate()}日`;
-    } catch {
-      return dateStr;
-    }
-  };
+  const formatTimelineDate = (dateStr: string) => formatMediaDate(dateStr);
 
   // Helper: check if a date matches any trip day, prioritizing trip_id if available
   const getTripDayLabel = (dateStr: string, dayPhotos?: Media[]) => {
@@ -147,21 +135,27 @@ export default function PhotosGallery({
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Read EXIF from the original and compress via the shared pipeline.
-    const prepared = await preparePhotoForUpload(file, { allowBrowserLocationFallback });
-    setFileName(prepared.fileName);
-    setFileSize(prepared.fileSize);
-    setPendingExif(prepared.exif);
-    if (prepared.exif.capturedAt) {
-      setUploadCapturedDate(prepared.exif.capturedAt.split('T')[0]);
+    setUploadError('');
+    try {
+      // Read EXIF from the original and compress via the shared pipeline.
+      const prepared = await preparePhotoForUpload(file, { allowBrowserLocationFallback });
+      setFileName(prepared.fileName);
+      setFileSize(prepared.fileSize);
+      setPendingExif(prepared.exif);
+      if (prepared.exif.capturedAt) {
+        setUploadCapturedDate(prepared.exif.capturedAt.split('T')[0]);
+      }
+      setPreviewUrl(prepared.dataUrl);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : '照片处理失败，请重新选择。');
     }
-    setPreviewUrl(prepared.dataUrl);
   };
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!previewUrl || isUploading) return;
     setIsUploading(true);
+    setUploadError('');
 
     // Auto-match trip if trip not set but date matches
     let finalTripId = uploadTripId;
@@ -209,8 +203,6 @@ export default function PhotosGallery({
           setPhotoPrompt({ mediaId: created.id, recognized: false });
         }
       }
-    } finally {
-      setIsUploading(false);
       setPreviewUrl(null);
       setFileName('');
       setFileSize(0);
@@ -218,6 +210,10 @@ export default function PhotosGallery({
       setUploadTripId('');
       setPendingExif({});
       setShowUploadModal(false);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : '上传失败，请检查网络后重试。');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -274,7 +270,10 @@ export default function PhotosGallery({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => setShowUploadModal(true)}
+            onClick={() => {
+              setUploadError('');
+              setShowUploadModal(true);
+            }}
             className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm shadow-blue-500/15"
           >
             <UploadCloud size={14} />
@@ -627,8 +626,10 @@ export default function PhotosGallery({
             <div className="flex items-center justify-between">
               <h4 className="font-extrabold text-slate-800 text-sm">📸 上传精选旅行实景照片</h4>
               <button 
+                aria-label="关闭照片上传"
                 onClick={() => {
                   setPreviewUrl(null);
+                  setUploadError('');
                   setShowUploadModal(false);
                 }}
                 className="p-1 rounded-full text-slate-400 hover:text-slate-600"
@@ -638,6 +639,11 @@ export default function PhotosGallery({
             </div>
 
             <form onSubmit={handleUploadSubmit} className="space-y-4">
+              {uploadError && (
+                <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold leading-relaxed text-rose-700">
+                  {uploadError}
+                </p>
+              )}
               {/* File Dropzone */}
               <div className="space-y-1">
                 <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block">选取照片文件</label>

@@ -55,6 +55,7 @@ export default function MobilePlaceDetailPage({
 
   // Photo state
   const [isUploading, setIsUploading] = useState(false);
+  const [feedback, setFeedback] = useState('');
 
   // Visit logging state
   const [showVisitForm, setShowVisitForm] = useState(false);
@@ -100,6 +101,7 @@ export default function MobilePlaceDetailPage({
   const handlePhotoUploadChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !onUploadPhoto) return;
+    setFeedback('');
     setIsUploading(true);
     try {
       const prepared = await preparePhotoForUpload(file);
@@ -113,7 +115,7 @@ export default function MobilePlaceDetailPage({
       });
       setIsUploading(false);
     } catch (err) {
-      alert('上传失败');
+      setFeedback('上传失败，请检查网络后重试。');
       setIsUploading(false);
     }
   };
@@ -121,6 +123,7 @@ export default function MobilePlaceDetailPage({
   const handleVisitFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!onCreateVisit) return;
+    setFeedback('');
     try {
       await onCreateVisit({
         place_id: place.id,
@@ -136,7 +139,7 @@ export default function MobilePlaceDetailPage({
       setVisitNote('');
       setVisitCost('');
     } catch (err) {
-      alert('保存记录失败');
+      setFeedback('保存记录失败，请检查网络后重试。');
     }
   };
 
@@ -165,14 +168,15 @@ export default function MobilePlaceDetailPage({
           <button 
             id="m_details_back"
             onClick={onBack}
+            aria-label="返回地图"
             className="w-10 h-10 rounded-full bg-slate-900/40 backdrop-blur-md text-white flex items-center justify-center active:scale-90 transition-all outline-none"
           >
             <ArrowLeft size={20} />
           </button>
           
           <div className="flex gap-2">
-            {onEditPlace && <button onClick={() => onEditPlace(place)} className="w-10 h-10 rounded-full bg-slate-900/40 backdrop-blur-md text-white flex items-center justify-center active:scale-90 transition-all outline-none" title="编辑地点"><Edit3 size={18} /></button>}
-            <button id="m_details_fav" onClick={() => onToggleFavorite(place.id)} className="w-10 h-10 rounded-full bg-slate-900/40 backdrop-blur-md text-white flex items-center justify-center active:scale-90 transition-all outline-none"><Heart size={20} className={place.favorite ? "fill-rose-500 text-rose-500" : ""} /></button>
+            {onEditPlace && <button aria-label="编辑地点" onClick={() => onEditPlace(place)} className="w-10 h-10 rounded-full bg-slate-900/40 backdrop-blur-md text-white flex items-center justify-center active:scale-90 transition-all outline-none" title="编辑地点"><Edit3 size={18} /></button>}
+            <button id="m_details_fav" aria-label={place.favorite ? '取消收藏' : '添加收藏'} aria-pressed={place.favorite} onClick={() => onToggleFavorite(place.id)} className="w-10 h-10 rounded-full bg-slate-900/40 backdrop-blur-md text-white flex items-center justify-center active:scale-90 transition-all outline-none"><Heart size={20} className={place.favorite ? "fill-rose-500 text-rose-500" : ""} /></button>
           </div>
         </div>
 
@@ -210,6 +214,7 @@ export default function MobilePlaceDetailPage({
 
       {/* 3. Tab Contents */}
       <div className="flex-1 overflow-y-auto p-5 pb-24 space-y-4">
+        {feedback && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold leading-relaxed text-rose-700">{feedback}</p>}
         {activeTab === 'overview' && (
           <div className="space-y-4 animate-in fade-in-50 duration-150">
             {/* Info Grid Card */}
@@ -506,7 +511,7 @@ export default function MobilePlaceDetailPage({
               setSelectedTripId(trips[0].id);
               setShowAddTripModal(true);
             } else {
-              alert('您需要先在“行程”模块创建一条行程！');
+              setFeedback('请先在“行程”模块创建一条行程，再安排地点。');
             }
           }}
           className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-md shadow-blue-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 outline-none"

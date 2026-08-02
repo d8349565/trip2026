@@ -26,6 +26,7 @@ export default function MobileGuideDetailPage({
 }: MobileGuideDetailPageProps) {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [feedback, setFeedback] = useState('');
 
   // Edit fields
   const [editTitle, setEditTitle] = useState(guide.title);
@@ -56,16 +57,16 @@ export default function MobileGuideDetailPage({
       onSelectPlaceOnMap(associatedPlace.id);
       onClose();
     } else {
-      alert('本攻略属于通用自驾户外经验，没有特定绑定位置。');
+      setFeedback('这篇攻略是通用经验，没有绑定到具体地点。');
     }
   };
 
   const handleAddTrip = () => {
     if (associatedPlace) {
       onAddPlaceToTrip(associatedPlace.id);
-      alert(`已成功将「${associatedPlace.name}」添加至您的激活日程中！`);
+      setFeedback(`已打开「${associatedPlace.name}」的加入行程面板，请选择具体日期。`);
     } else {
-      alert('本攻略没有关联具体的地理打卡点，无法加入行程。');
+      setFeedback('这篇攻略没有关联具体地点，暂时无法加入行程。');
     }
   };
 
@@ -80,6 +81,7 @@ export default function MobileGuideDetailPage({
         <button
           id="m_guide_detail_back"
           onClick={onClose}
+          aria-label="返回攻略列表"
           className="w-9 h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-700 outline-none active:scale-95 transition-all"
         >
           <ChevronLeft size={20} />
@@ -92,6 +94,7 @@ export default function MobileGuideDetailPage({
         <button
           id="m_guide_detail_more"
           onClick={() => setShowMoreMenu(true)}
+          aria-label="打开攻略更多操作"
           className="w-9 h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-600 outline-none"
         >
           <MoreVertical size={16} />
@@ -100,6 +103,11 @@ export default function MobileGuideDetailPage({
 
       {/* 2. Main Content Body Area */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        {feedback && (
+          <p role="status" className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold leading-relaxed text-blue-700">
+            {feedback}
+          </p>
+        )}
         {isEditing ? (
           <div className="space-y-4 text-xs">
             <div>
@@ -227,7 +235,7 @@ export default function MobileGuideDetailPage({
           <div className="relative w-full bg-white rounded-t-3xl shadow-2xl z-10 p-5 space-y-3 animate-slide-up">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <h5 className="font-extrabold text-slate-800 text-xs">更多攻略工具</h5>
-              <button onClick={() => setShowMoreMenu(false)} className="p-1 rounded-full bg-slate-100 text-slate-500 outline-none"><X size={15} /></button>
+              <button aria-label="关闭攻略更多操作" onClick={() => setShowMoreMenu(false)} className="p-1 rounded-full bg-slate-100 text-slate-500 outline-none"><X size={15} /></button>
             </div>
 
             <div className="space-y-1">

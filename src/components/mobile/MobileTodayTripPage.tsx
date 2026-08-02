@@ -13,6 +13,7 @@ interface MobileTodayTripPageProps {
   onUpdateItemStatus: (itemId: string, status: 'pending' | 'completed' | 'skipped') => void;
   onNavigateToPlace: (placeId: string) => void;
   onOpenTripSelector: () => void;
+  onOpenCreateTrip: () => void;
   onOpenDaySelector: () => void;
   allDays: TripDay[];
 }
@@ -25,6 +26,7 @@ export default function MobileTodayTripPage({
   onUpdateItemStatus,
   onNavigateToPlace,
   onOpenTripSelector,
+  onOpenCreateTrip,
   onOpenDaySelector,
   allDays,
 }: MobileTodayTripPageProps) {
@@ -33,13 +35,13 @@ export default function MobileTodayTripPage({
       <div className="flex-1 flex flex-col items-center justify-center py-16 px-5 bg-white rounded-2xl border border-slate-100 shadow-sm font-sans">
         <Calendar size={40} className="text-slate-300" />
         <p className="text-[15px] font-extrabold text-slate-800 mt-3">暂无行程</p>
-        <p className="text-[12px] text-slate-400 mt-1 text-center">点底部「+」→ 创建行程，开始规划路线</p>
+        <p className="text-[12px] text-slate-400 mt-1 text-center">先创建一条旅行路线，再把地点编排到每天的行程里</p>
         <button
           type="button"
-          onClick={onOpenTripSelector}
+          onClick={onOpenCreateTrip}
           className="mt-4 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold active:scale-95 transition-all"
         >
-          创建行程
+          立即创建行程
         </button>
       </div>
     );

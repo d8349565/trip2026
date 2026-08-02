@@ -10,6 +10,8 @@ import {
   Car, ShieldAlert, Sparkles, Navigation, CheckCircle2, Circle, HelpCircle, AlertCircle,
   Edit, Save, CheckSquare, Image as ImageIcon
 } from 'lucide-react';
+import { getDefaultTripDateRange, isValidTripDateRange } from '../utils/tripDates';
+import EmptyState from './EmptyState';
 
 interface TripPlannerProps {
   trips: Trip[];
@@ -76,12 +78,13 @@ export default function TripPlanner({
 
   // Form states
   const [title, setTitle] = useState('');
-  const [startDate, setStartDate] = useState('2026-07-13');
-  const [endDate, setEndDate] = useState('2026-07-15');
+  const [startDate, setStartDate] = useState(() => getDefaultTripDateRange().startDate);
+  const [endDate, setEndDate] = useState(() => getDefaultTripDateRange().endDate);
   const [origin, setOrigin] = useState('广州市');
   const [destSummary, setDestSummary] = useState('潮州市');
   const [vehicle, setVehicle] = useState('新能源汽车');
   const [budget, setBudget] = useState('2500');
+  const [dateError, setDateError] = useState('');
 
   // Trip Day Summary Editing State
   const [isEditingDay, setIsEditingDay] = useState(false);
@@ -108,6 +111,11 @@ export default function TripPlanner({
   const handleCreateTripSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !startDate || !endDate) return;
+    if (!isValidTripDateRange(startDate, endDate)) {
+      setDateError('结束日期不能早于开始日期，请重新选择。');
+      return;
+    }
+    setDateError('');
     onCreateTrip({
       title,
       start_date: startDate,
@@ -119,6 +127,15 @@ export default function TripPlanner({
       status: 'upcoming'
     });
     setShowCreateTripModal(false);
+  };
+
+  const openCreateTripModal = () => {
+    const defaults = getDefaultTripDateRange();
+    setTitle('');
+    setStartDate(defaults.startDate);
+    setEndDate(defaults.endDate);
+    setDateError('');
+    setShowCreateTripModal(true);
   };
 
   const handleAddItemSubmit = (e: React.FormEvent) => {
@@ -487,7 +504,7 @@ export default function TripPlanner({
             </button>
           )}
           <button
-            onClick={() => setShowCreateTripModal(true)}
+            onClick={openCreateTripModal}
             className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-xl flex items-center gap-1 hover:bg-blue-700 active:scale-95 transition-all shadow-sm shadow-blue-500/20"
           >
             <Plus size={14} />
@@ -987,19 +1004,13 @@ export default function TripPlanner({
           </div>
         </div>
       ) : (
-        <div className="py-20 text-center bg-white rounded-2xl border border-slate-100 p-8 space-y-3">
-          <Calendar size={32} className="mx-auto text-slate-300 animate-bounce" />
-          <h4 className="font-bold text-slate-700 text-sm">还没有行程足迹</h4>
-          <p className="text-xs text-slate-400 max-w-md mx-auto">
-            “旅行足迹”支持多日自驾行程编排。在右上方创建一个行程，然后开始在地图上把收藏的玩水避暑溯溪点加进您的路书中吧！
-          </p>
-          <button
-            onClick={() => setShowCreateTripModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700"
-          >
-            立即创建首个行程
-          </button>
-        </div>
+        <EmptyState
+          icon={<Calendar size={26} />}
+          title="还没有行程足迹"
+          description="先创建一条旅行路线，再从地图把想去的地点加入每天的时间线；日期、预算和装备都可以继续补充。"
+          actionLabel="创建首个行程"
+          onAction={openCreateTripModal}
+        />
       )}
 
       {/* CREATE TRIP DIALOG POPOVER */}
@@ -1010,6 +1021,7 @@ export default function TripPlanner({
               <h4 className="font-extrabold text-slate-800 text-sm">🎒 规划全新旅行行程</h4>
               <button 
                 onClick={() => setShowCreateTripModal(false)}
+                aria-label="关闭创建行程"
                 className="p-1 rounded-full text-slate-400 hover:text-slate-600"
               >
                 <XIcon size={16} />
@@ -1019,8 +1031,9 @@ export default function TripPlanner({
             <form onSubmit={handleCreateTripSubmit} className="space-y-3">
               <div className="space-y-0.5">
                 <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">行程标题 / 名称</label>
-                <input 
+                <input
                   type="text" 
+                  aria-label="行程标题 / 名称"
                   placeholder="如：国庆潮州3天自驾深度游"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -1032,8 +1045,9 @@ export default function TripPlanner({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-0.5">
                   <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">开始日期</label>
-                  <input 
-                    type="date" 
+                <input
+                  type="date"
+                  aria-label="开始日期"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                     className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none"
@@ -1042,8 +1056,10 @@ export default function TripPlanner({
                 </div>
                 <div className="space-y-0.5">
                   <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">结束日期</label>
-                  <input 
-                    type="date" 
+                <input
+                  type="date"
+                  aria-label="结束日期"
+                  min={startDate}
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                     className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none"
@@ -1052,11 +1068,14 @@ export default function TripPlanner({
                 </div>
               </div>
 
+              {dateError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] font-bold text-rose-700">{dateError}</p>}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-0.5">
                   <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">出发城市</label>
-                  <input 
-                    type="text" 
+                <input
+                  type="text"
+                  aria-label="出发城市"
                     placeholder="广州市"
                     value={origin}
                     onChange={(e) => setOrigin(e.target.value)}
@@ -1065,8 +1084,9 @@ export default function TripPlanner({
                 </div>
                 <div className="space-y-0.5">
                   <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">目标区域</label>
-                  <input 
-                    type="text" 
+                <input
+                  type="text"
+                  aria-label="目标区域"
                     placeholder="潮州市、归湖镇"
                     value={destSummary}
                     onChange={(e) => setDestSummary(e.target.value)}
@@ -1078,8 +1098,9 @@ export default function TripPlanner({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-0.5">
                   <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">出行交通/车辆</label>
-                  <input 
-                    type="text" 
+                <input
+                  type="text"
+                  aria-label="出行交通或车辆"
                     placeholder="纯电SUV"
                     value={vehicle}
                     onChange={(e) => setVehicle(e.target.value)}
@@ -1088,8 +1109,9 @@ export default function TripPlanner({
                 </div>
                 <div className="space-y-0.5">
                   <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">行程预算金额 (元)</label>
-                  <input 
-                    type="number" 
+                <input
+                  type="number"
+                  aria-label="行程预算金额"
                     placeholder="2500"
                     value={budget}
                     onChange={(e) => setBudget(e.target.value)}

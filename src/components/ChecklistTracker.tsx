@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { Checklist, ChecklistItem, Trip } from '../types';
 import { Plus, Trash2, Check, Sparkles, FolderOpen, Tag, Calendar, User, Eye, Layers } from 'lucide-react';
+import EmptyState from './EmptyState';
 
 interface ChecklistTrackerProps {
   checklists: Checklist[];
@@ -303,19 +304,13 @@ export default function ChecklistTracker({
           </div>
         </div>
       ) : (
-        <div className="py-20 text-center bg-white rounded-2xl border border-slate-100 p-8 space-y-3 shrink-0">
-          <FolderOpen size={32} className="mx-auto text-slate-300 animate-pulse" />
-          <h4 className="font-bold text-slate-700 text-sm">还没有装备清单</h4>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            一键导入溯溪戏水、自驾准备或亲子出游物品模版，帮助全家有条不紊装箱。
-          </p>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 active:scale-95 transition-all shadow-md"
-          >
-            立刻导入装备清单模板
-          </button>
-        </div>
+        <EmptyState
+          icon={<FolderOpen size={26} />}
+          title="还没有装备清单"
+          description="按出行类型导入一份模板，再根据家庭成员和行程地点补充物品，装箱时逐项勾选。"
+          actionLabel="选择装备模板"
+          onAction={() => setShowCreateModal(true)}
+        />
       )}
 
       {/* CREATE LIST DIALOG POPOVER */}
@@ -325,6 +320,7 @@ export default function ChecklistTracker({
             <div className="flex items-center justify-between">
               <h4 className="font-extrabold text-slate-800 text-sm">📋 导入全新物品装备模板</h4>
               <button 
+                aria-label="关闭装备模板窗口"
                 onClick={() => setShowCreateModal(false)}
                 className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
               >

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Checklist, ChecklistItem, Trip } from '../../types';
 import { CheckSquare, Square, Filter, ChevronDown, ChevronRight, User, Plus, X, Tag } from 'lucide-react';
+import EmptyState from '../EmptyState';
 
 interface MobileChecklistPageProps {
   checklists: Checklist[];
@@ -30,6 +31,7 @@ export default function MobileChecklistPage({
   const [newItemQty, setNewItemQty] = useState('1');
   const [newItemOwner, setNewItemOwner] = useState('所有人');
   const [newItemRequired, setNewItemRequired] = useState(true);
+  const [templateFeedback, setTemplateFeedback] = useState('');
 
   // Group checklist items by category
   const categoriesList = ['证件与资金', '车辆与充电', '亲子用品', '户外装备', '医疗药品', '衣物洗漱', '其他装备'];
@@ -78,7 +80,7 @@ export default function MobileChecklistPage({
 
   const handleLoadTemplate = (type: string) => {
     if (trips.length === 0) {
-      alert('请先创建一条行程再导入清单模板！');
+      setTemplateFeedback('请先创建一条行程，再导入清单模板。');
       return;
     }
     const templateNames: Record<string, string> = {
@@ -88,7 +90,7 @@ export default function MobileChecklistPage({
       general: '🎒 户外通用基础行囊清单',
     };
     onAddChecklistFromTemplate(templateNames[type] || '自驾旅行清单', trips[0].id, type);
-    alert('模板导入成功！');
+    setTemplateFeedback('模板正在导入，稍后即可开始核对。');
   };
 
   return (
@@ -158,6 +160,12 @@ export default function MobileChecklistPage({
         </div>
       </div>
 
+      {templateFeedback && (
+        <p role="status" className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold leading-relaxed text-blue-700">
+          {templateFeedback}
+        </p>
+      )}
+
       {/* 2. Quick import templates if list is empty */}
       {totalCount === 0 && (
         <div className="bg-white rounded-2xl p-5 border border-slate-100 text-center space-y-4">
@@ -177,7 +185,7 @@ export default function MobileChecklistPage({
         <form onSubmit={handleCreateItemSubmit} className="bg-white rounded-2xl p-4.5 border border-blue-100 space-y-3.5 text-xs animate-in slide-in-from-top-3">
           <div className="flex justify-between items-center border-b border-slate-50 pb-1">
             <h5 className="font-extrabold text-slate-800">📋 新增个人专属行囊节点</h5>
-            <button type="button" onClick={() => setShowAddForm(false)} className="text-slate-400"><X size={15} /></button>
+            <button type="button" aria-label="关闭新增清单项" onClick={() => setShowAddForm(false)} className="text-slate-400"><X size={15} /></button>
           </div>
 
           <div>
@@ -318,6 +326,19 @@ export default function MobileChecklistPage({
             );
           })}
         </div>
+      )}
+
+      {totalCount > 0 && filteredItems.length === 0 && (
+        <EmptyState
+          icon={<Filter size={24} />}
+          title="没有符合条件的清单项"
+          description="当前筛选条件下没有待核对内容，清除筛选后可以继续查看全部行囊。"
+          actionLabel="清除筛选"
+          onAction={() => {
+            setOnlyUnfinished(false);
+            setSelectedOwner('');
+          }}
+        />
       )}
     </div>
   );

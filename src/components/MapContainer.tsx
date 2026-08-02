@@ -11,7 +11,7 @@ import { wgs84ToGcj02 } from '../utils/coords';
 import { confirmedPhotoLocationFields } from '../utils/photoUpload';
 import { clusterPlaces, selectClusterRepresentative, summarizePlaceMedia } from '../utils/mapClusters';
 import { resolveMapFocus, shouldFitAllPlacesInitially } from '../utils/mapViewport';
-import type { Place, PlaceCategory, Media, MediaUploadInput } from '../types';
+import type { MapLocation, Place, PlaceCategory, Media, MediaUploadInput } from '../types';
 
 /** 一张「本地已处理、尚未落库」的照片，等待用户在地图上确认位置与归属后一并保存。 */
 export interface PendingPhotoUpload {
@@ -53,6 +53,7 @@ interface MapContainerProps {
   onSavePhoto?: (data: MediaUploadInput) => Promise<Media | undefined>;
   /** 手机端定位按钮通过递增 token 触发地图重新定位。 */
   locateRequest?: number;
+  onLocationChange?: (location: MapLocation) => void;
   categoryColors: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }>;
   categoryLabels: Record<PlaceCategory, string>;
   categoryIcons: Record<PlaceCategory, React.ReactNode>;
@@ -186,6 +187,7 @@ export default function MapContainer({
   onPhotoUploadDone,
   onSavePhoto,
   locateRequest = 0,
+  onLocationChange,
   categoryLabels,
   searchSlot,
 }: MapContainerProps) {
@@ -208,6 +210,7 @@ export default function MapContainer({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [manualCreateMode, setManualCreateMode] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ place: Place; x: number; y: number } | null>(null);
   const [photoMode, setPhotoMode] = useState<string | null>(null);
   const placeMediaSummaries = useMemo(
@@ -289,6 +292,7 @@ export default function MapContainer({
   const startDraftAt = (latitude: number, longitude: number, seed: Partial<Place> = {}) => {
     setEditingId(null);
     setContextMenu(null);
+    setManualCreateMode(!photoModeRef.current && !uploadModeRef.current);
     setMessage('拖动蓝色标记可微调位置，保存前地图始终可见。');
     nameAutoFilledRef.current = true;
     setDraft({ ...EMPTY_DRAFT, ...seed, latitude, longitude });
@@ -298,6 +302,7 @@ export default function MapContainer({
 
   useEffect(() => {
     if (!editorRequest) return;
+    setManualCreateMode(true);
     searchInputRef.current?.focus();
     setMessage('搜索地点，或双击地图开始手动标记。');
   }, [editorRequest]);
@@ -690,6 +695,7 @@ export default function MapContainer({
       && current.accuracyM === location.accuracyM
       ? { ...current, ...location }
       : location);
+    onLocationChange?.(location);
     if (persist) {
       try {
         localStorage.setItem(MY_LOCATION_KEY, JSON.stringify(location));
@@ -803,6 +809,7 @@ export default function MapContainer({
 
   const editPlace = (place: Place) => {
     nameAutoFilledRef.current = true;
+    setManualCreateMode(false);
     setEditingId(place.id);
     setDraft({ ...place });
     setContextMenu(null);
@@ -845,6 +852,7 @@ export default function MapContainer({
         : await onCreatePlace(draft);
       setDraft(null);
       setEditingId(null);
+      setManualCreateMode(false);
       endPhotoMode();
       onSelectPlace(saved);
     } catch (cause) {
@@ -930,6 +938,7 @@ export default function MapContainer({
     setDraft(null);
     setEditingId(null);
     setDraftExpanded(false);
+    setManualCreateMode(false);
     setMessage('');
     setAttribMode('new');
     setSelectedExistingId(null);
@@ -956,11 +965,22 @@ export default function MapContainer({
       {!ready && !error && <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-50 text-sm font-semibold text-slate-500">正在加载高德地图…</div>}
       {error && <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-50 px-6 text-center"><p className="font-bold text-red-600">{error}</p><p className="mt-2 text-xs text-slate-500">请检查 Key 类型、安全密钥和域名配置。</p></div>}
 
-      <div className="absolute left-3 right-3 top-3 z-40 max-w-md sm:right-16" onClick={(event) => event.stopPropagation()}>
+      {manualCreateMode && !draft && (
+        <div className="absolute left-3 right-3 top-3 z-50 flex items-start gap-3 rounded-2xl border border-blue-200 bg-white/95 px-3.5 py-3 shadow-lg backdrop-blur-md sm:left-1/2 sm:right-auto sm:w-[min(420px,calc(100%-1.5rem))] sm:-translate-x-1/2">
+          <MapPin size={16} className="mt-0.5 shrink-0 text-blue-600" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-extrabold text-slate-800">正在新增地点</p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">搜索高德地点，或在地图上双击（手机长按）选点；选好后再确认名称和分类。</p>
+          </div>
+          <button type="button" onClick={() => { setManualCreateMode(false); setMessage(''); searchInputRef.current?.blur(); }} className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-bold text-slate-400 hover:bg-slate-100 hover:text-slate-600">退出</button>
+        </div>
+      )}
+
+      <div className={`absolute left-3 right-3 ${manualCreateMode ? 'top-20' : 'top-3'} z-40 max-w-md sm:right-16`} onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center rounded-2xl border border-white/50 bg-white/75 p-1 shadow-[0_2px_24px_-4px_rgba(0,0,0,0.10),0_0_0_1px_rgba(0,0,0,0.02)] backdrop-blur-xl">
           {searchMode === 'poi' ? <form onSubmit={searchPoi} className="flex min-w-0 flex-1 items-center gap-1">
             <Search size={15} className="ml-2.5 shrink-0 text-slate-300" />
-            <input ref={searchInputRef} data-testid="map-poi-search" value={keywords} onChange={(event) => setKeywords(event.target.value)} placeholder="在地图上搜索地点…" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-slate-300" />
+            <input ref={searchInputRef} data-testid="map-poi-search" value={keywords} onChange={(event) => setKeywords(event.target.value)} placeholder="搜索高德地点（新增或补充）" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-slate-300" />
             <input value={region} onChange={(event) => setRegion(event.target.value)} placeholder="城市" className="hidden w-20 rounded-lg bg-slate-50 px-2 text-[11px] outline-none sm:block" />
             <button disabled={busy} className="rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm shadow-blue-500/25 disabled:opacity-50 active:scale-[0.97] transition-all">搜索</button>
           </form> : <form onSubmit={resolveShare} className="flex min-w-0 flex-1 items-center gap-1">
@@ -968,8 +988,8 @@ export default function MapContainer({
             <input value={shareUrl} onChange={(event) => setShareUrl(event.target.value)} placeholder="粘贴高德或百度地图分享链接…" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-slate-300" />
             <button disabled={busy} className="rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm shadow-blue-500/25 disabled:opacity-50 active:scale-[0.97] transition-all">解析</button>
           </form>}
-          <button type="button" onClick={() => { setSearchMode((current) => current === 'poi' ? 'share' : 'poi'); setPois([]); }} className="ml-0.5 rounded-xl p-2 text-slate-400 hover:bg-slate-100/80 hover:text-slate-600 active:scale-95 transition-all" title={searchMode === 'poi' ? '粘贴地图分享链接' : '搜索高德地点'}>{searchMode === 'poi' ? <Link2 size={15} /> : <Search size={15} />}</button>
-          <button type="button" onClick={() => { setMessage('请在地图目标位置双击，随后可拖动蓝色标记微调。'); searchInputRef.current?.blur(); }} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100/80 hover:text-slate-600 active:scale-95 transition-all" title="手动地图选点"><MapPin size={15} /></button>
+          <button type="button" aria-label={searchMode === 'poi' ? '粘贴地图分享链接' : '搜索高德地点'} onClick={() => { setSearchMode((current) => current === 'poi' ? 'share' : 'poi'); setPois([]); }} className="ml-0.5 rounded-xl p-2 text-slate-400 hover:bg-slate-100/80 hover:text-slate-600 active:scale-95 transition-all" title={searchMode === 'poi' ? '粘贴地图分享链接' : '搜索高德地点'}>{searchMode === 'poi' ? <Link2 size={15} /> : <Search size={15} />}</button>
+          <button type="button" aria-label="手动地图选点" onClick={() => { setManualCreateMode(true); setMessage('请在地图目标位置双击，随后可拖动蓝色标记微调。'); searchInputRef.current?.blur(); }} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100/80 hover:text-slate-600 active:scale-95 transition-all" title="手动地图选点"><MapPin size={15} /></button>
         </div>
 
         {searchSlot && <div className="mt-2" onClick={(event) => event.stopPropagation()}>{searchSlot}</div>}

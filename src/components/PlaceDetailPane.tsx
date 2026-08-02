@@ -4,8 +4,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { IMAGE_PLACEHOLDER, Place, Trip, TripDay, Media, Guide, TripItem, Visit, type MediaUploadInput } from '../types';
+import { IMAGE_PLACEHOLDER, MapLocation, Place, Trip, TripDay, Media, Guide, TripItem, Visit, type MediaUploadInput } from '../types';
 import { photoLocationFields, preparePhotoForUpload } from '../utils/photoUpload';
+import { calculateDistanceKm } from '../utils/distance';
 import { 
   Heart, CheckSquare, Star, MapPin, AlertTriangle, Lightbulb, 
   Layers, ChevronRight, X, Image as ImageIcon, Sparkles, Clock, 
@@ -24,7 +25,7 @@ interface PlaceDetailPaneProps {
   onClose: () => void;
   onToggleFavorite: (id: string) => void;
   onToggleVisited: (id: string) => void;
-  onAddToTrip: (placeId: string, tripDayId: string, type: string, time: string, note: string) => void;
+  onAddToTrip: (placeId: string, tripDayId: string, type: string, time: string, note: string) => void | Promise<void>;
   categoryColors: Record<string, { bg: string; text: string; iconBg: string; border: string }>;
   categoryLabels: Record<string, string>;
   onNavigateToView?: (view: 'map' | 'trip' | 'photos' | 'checklist' | 'guide', id?: string) => void;
@@ -33,6 +34,7 @@ interface PlaceDetailPaneProps {
   onUploadPhoto?: (photoData: MediaUploadInput & { place_id: string }) => Promise<unknown>; // added
   onEditPlace?: (place: Place) => void;
   onSetCover?: (placeId: string, photoUrl: string) => void;
+  userLocation?: MapLocation | null;
 }
 
 export default function PlaceDetailPane({
@@ -55,6 +57,7 @@ export default function PlaceDetailPane({
   onUploadPhoto,
   onEditPlace,
   onSetCover,
+  userLocation = null,
 }: PlaceDetailPaneProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'guide' | 'photos' | 'visit'>('overview');
   const [showAddTripModal, setShowAddTripModal] = useState(false);
@@ -70,6 +73,7 @@ export default function PlaceDetailPane({
   const [guideSource, setGuideSource] = useState('原创记录');
   const [guideContent, setGuideContent] = useState('');
   const [guideSuccess, setGuideSuccess] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   // Photo upload form state
   const [uploadProgress, setUploadProgress] = useState(false);
@@ -134,31 +138,36 @@ export default function PlaceDetailPane({
     })
     .filter(record => record.day && record.trip);
 
-  // Dynamic Geological Distance formula centered near map origin (23.68, 116.62)
-  const distance = Math.round(
-    Math.sqrt(
-      Math.pow((place.latitude - 23.68) * 111, 2) + 
-      Math.pow((place.longitude - 116.62) * 111, 2)
-    ) * 10
-  ) / 10;
+  const distance = userLocation
+    ? calculateDistanceKm(userLocation, { latitude: place.latitude, longitude: place.longitude })
+    : undefined;
 
   const filteredDays = tripDays.filter(d => d.trip_id === selectedTripId);
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDayId) return;
-    onAddToTrip(place.id, selectedDayId, place.category_id, scheduledTime, scheduledNote);
-    setAddSuccess(true);
-    setTimeout(() => {
-      setAddSuccess(false);
-      setShowAddTripModal(false);
-    }, 1500);
+    setActionError('');
+    if (!selectedDayId) {
+      setActionError('请先选择要加入的日程日期。');
+      return;
+    }
+    try {
+      await onAddToTrip(place.id, selectedDayId, place.category_id, scheduledTime, scheduledNote);
+      setAddSuccess(true);
+      setTimeout(() => {
+        setAddSuccess(false);
+        setShowAddTripModal(false);
+      }, 1500);
+    } catch (err) {
+      setActionError('加入行程失败，请检查网络后重试。');
+    }
   };
 
   // Guide Submission Handler
   const handleGuideSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!guideTitle || !guideContent || !onCreateGuide) return;
+    setActionError('');
     try {
       await onCreateGuide({
         title: guideTitle,
@@ -177,7 +186,7 @@ export default function PlaceDetailPane({
         setShowAddGuideForm(false);
       }, 1200);
     } catch (err) {
-      alert('保存攻略失败');
+      setActionError('保存攻略失败，请检查网络后重试。');
     }
   };
 
@@ -185,6 +194,7 @@ export default function PlaceDetailPane({
   const handleVisitSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!onCreateVisit) return;
+    setActionError('');
     try {
       await onCreateVisit({
         place_id: place.id,
@@ -203,7 +213,7 @@ export default function PlaceDetailPane({
         setShowVisitForm(false);
       }, 1200);
     } catch (err) {
-      alert('到访打卡保存失败');
+      setActionError('到访打卡保存失败，请检查网络后重试。');
     }
   };
 
@@ -244,16 +254,18 @@ export default function PlaceDetailPane({
       <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
         <button 
           onClick={onClose}
+          aria-label="关闭地点详情"
           className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           title="关闭详情"
         >
           <X size={18} />
         </button>
         <div className="flex items-center gap-2">
-          {onEditPlace && <button onClick={() => onEditPlace(place)} className="rounded-full border border-slate-200 p-1.5 text-slate-500 transition-all hover:bg-slate-100" title="编辑地点"><PenSquare size={15} /></button>}
+          {onEditPlace && <button aria-label="编辑地点" onClick={() => onEditPlace(place)} className="rounded-full border border-slate-200 p-1.5 text-slate-500 transition-all hover:bg-slate-100" title="编辑地点"><PenSquare size={15} /></button>}
           {/* visited check */}
           <button
             onClick={() => onToggleVisited(place.id)}
+            aria-pressed={place.status === 'visited'}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
               place.status === 'visited'
                 ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
@@ -267,6 +279,7 @@ export default function PlaceDetailPane({
           {/* favorite star */}
           <button
             onClick={() => onToggleFavorite(place.id)}
+            aria-label={place.favorite ? '取消收藏' : '添加收藏'}
             className={`p-1.5 rounded-full border transition-all ${
               place.favorite
                 ? 'bg-amber-50 text-amber-500 border-amber-200'
@@ -305,7 +318,11 @@ export default function PlaceDetailPane({
           <MapPin size={11} className="text-slate-400 shrink-0" />
           <span className="truncate max-w-[150px]" title={place.address}>{place.address}</span>
           <span className="text-slate-300 mx-1 shrink-0">|</span>
-          <span className="text-blue-500 font-bold shrink-0">距您 {distance} km</span>
+          {distance !== undefined ? (
+            <span className="text-blue-500 font-bold shrink-0">距您 {distance} km</span>
+          ) : (
+            <span className="text-slate-400 font-semibold shrink-0" title="在地图上点击定位后显示距离">距离待定位</span>
+          )}
         </div>
       </div>
 
@@ -328,6 +345,16 @@ export default function PlaceDetailPane({
           </button>
         ))}
       </div>
+
+      {actionError && (
+        <div role="alert" className="mx-4 mt-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span className="flex-1 leading-relaxed">{actionError}</span>
+          <button type="button" aria-label="关闭错误提示" onClick={() => setActionError('')} className="shrink-0 rounded-md p-0.5 text-rose-500 hover:bg-rose-100">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Main tab scroll area */}
       <div className="flex-1 overflow-y-auto pb-24 scrollbar-thin">
@@ -906,7 +933,7 @@ export default function PlaceDetailPane({
               setSelectedTripId(trips[0].id);
               setShowAddTripModal(true);
             } else {
-              alert('您需要先在“行程”模块创建一条行程！');
+              setActionError('请先创建一条行程，再把地点加入日程。');
             }
           }}
           className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-xs shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-1.5"

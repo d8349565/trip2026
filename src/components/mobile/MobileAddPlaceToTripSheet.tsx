@@ -21,8 +21,6 @@ export default function MobileAddPlaceToTripSheet({
   onAddToTrip,
   onNavigateToTrip,
 }: MobileAddPlaceToTripSheetProps) {
-  if (!isOpen) return null;
-
   // Auto-suggest category/item type
   const getSuggestItemType = (category: string): TripItemType => {
     switch (category) {
@@ -53,6 +51,7 @@ export default function MobileAddPlaceToTripSheet({
   const [note, setNote] = useState(place.summary || '');
   const [isSuccess, setIsSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [feedback, setFeedback] = useState('');
 
   const activeTripDays = tripDays
     .filter(d => d.trip_id === selectedTripId)
@@ -66,10 +65,13 @@ export default function MobileAddPlaceToTripSheet({
     }
   }, [selectedTripId, tripDays]);
 
+  if (!isOpen) return null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFeedback('');
     if (!selectedDayId) {
-      alert('请先选择日程天数（Day）');
+      setFeedback('请先选择日程天数（Day）。');
       return;
     }
 
@@ -88,14 +90,14 @@ export default function MobileAddPlaceToTripSheet({
       setIsSuccess(true);
     } catch (err) {
       console.error(err);
-      alert('加入行程失败，请重试');
+      setFeedback('加入行程失败，请检查网络后重试。');
     }
   };
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end animate-fade-in">
       <div className="absolute inset-0" onClick={onClose}></div>
-      <div className="relative w-full bg-white rounded-t-3xl shadow-2xl z-10 flex flex-col max-h-[85vh] animate-slide-up">
+          <div className="relative w-full bg-white rounded-t-3xl shadow-2xl z-10 flex flex-col max-h-[85vh] animate-slide-up">
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div>
@@ -104,6 +106,7 @@ export default function MobileAddPlaceToTripSheet({
           </div>
           <button
             onClick={onClose}
+            aria-label="关闭加入行程"
             className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 active:scale-95 transition-all outline-none"
           >
             <X size={18} />
@@ -111,7 +114,8 @@ export default function MobileAddPlaceToTripSheet({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5 pb-[max(2rem,env(safe-area-inset-bottom))] font-sans">
+          <div className="flex-1 overflow-y-auto p-5 pb-[max(2rem,env(safe-area-inset-bottom))] font-sans">
+          {feedback && <p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold leading-relaxed text-rose-700">{feedback}</p>}
           {isSuccess ? (
             <div className="text-center py-8 space-y-5">
               <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto text-emerald-500">

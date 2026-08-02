@@ -23,8 +23,6 @@ export default function MobileQuickVisitSheet({
   activeDay,
   onCreateVisit,
 }: MobileQuickVisitSheetProps) {
-  if (!isOpen) return null;
-
   // Search places
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
@@ -39,6 +37,7 @@ export default function MobileQuickVisitSheet({
   const [actualCost, setActualCost] = useState<string>('');
   const [revisitIntention, setRevisitIntention] = useState<'yes' | 'maybe' | 'no'>('yes');
   const [note, setNote] = useState('');
+  const [feedback, setFeedback] = useState('');
 
   // Suggestions for places
   const filteredPlaces = searchQuery.trim() === ''
@@ -64,10 +63,13 @@ export default function MobileQuickVisitSheet({
     }
   }, [selectedTripId, tripDays]);
 
+  if (!isOpen) return null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFeedback('');
     if (!selectedPlace) {
-      alert('请先选择一个地点');
+      setFeedback('请先选择一个地点，再保存到访记录。');
       return;
     }
 
@@ -87,11 +89,10 @@ export default function MobileQuickVisitSheet({
       // Creating a visit marks the place as visited on the server.
       await onCreateVisit(visitData);
 
-      alert(`成功记录到访「${selectedPlace.name}」并已标记为已去过！`);
       onClose();
     } catch (err) {
       console.error(err);
-      alert('记录失败，请重试');
+      setFeedback('记录失败，请检查网络后重试。');
     }
   };
 
@@ -107,6 +108,7 @@ export default function MobileQuickVisitSheet({
           </div>
           <button
             onClick={onClose}
+            aria-label="关闭快速记录到访"
             className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 active:scale-95 transition-all outline-none"
           >
             <X size={18} />
@@ -115,6 +117,7 @@ export default function MobileQuickVisitSheet({
 
         {/* Scrollable Form */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4.5 pb-[max(2rem,env(safe-area-inset-bottom))] font-sans">
+          {feedback && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold leading-relaxed text-rose-700">{feedback}</p>}
           
           {/* 1. Place Selector */}
           <div className="space-y-1.5">

@@ -16,6 +16,8 @@ export default function MobileBottomNav({ currentView, onViewChange, onOpenCreat
       <button 
         id="m_nav_map"
         onClick={() => onViewChange('map')}
+        aria-label="地图"
+        aria-current={currentView === 'map' ? 'page' : undefined}
         className={`flex flex-col items-center justify-center gap-1 w-14 h-12 transition-all ${currentView === 'map' ? 'text-blue-600 scale-105' : 'hover:text-slate-600'}`}
       >
         <Map size={20} />
@@ -25,6 +27,8 @@ export default function MobileBottomNav({ currentView, onViewChange, onOpenCreat
       <button 
         id="m_nav_trip"
         onClick={() => onViewChange('trip')}
+        aria-label="行程"
+        aria-current={currentView === 'trip' ? 'page' : undefined}
         className={`flex flex-col items-center justify-center gap-1 w-14 h-12 transition-all ${currentView === 'trip' ? 'text-blue-600 scale-105' : 'hover:text-slate-600'}`}
       >
         <Calendar size={20} />
@@ -44,6 +48,8 @@ export default function MobileBottomNav({ currentView, onViewChange, onOpenCreat
       <button 
         id="m_nav_photos"
         onClick={() => onViewChange('photos')}
+        aria-label="照片"
+        aria-current={currentView === 'photos' ? 'page' : undefined}
         className={`flex flex-col items-center justify-center gap-1 w-14 h-12 transition-all ${currentView === 'photos' ? 'text-blue-600 scale-105' : 'hover:text-slate-600'}`}
       >
         <Image size={20} />
@@ -53,6 +59,8 @@ export default function MobileBottomNav({ currentView, onViewChange, onOpenCreat
       <button 
         id="m_nav_profile"
         onClick={() => onViewChange('profile')}
+        aria-label="我的"
+        aria-current={currentView === 'profile' ? 'page' : undefined}
         className={`flex flex-col items-center justify-center gap-1 w-14 h-12 transition-all ${currentView === 'profile' ? 'text-blue-600 scale-105' : 'hover:text-slate-600'}`}
       >
         <User size={20} />

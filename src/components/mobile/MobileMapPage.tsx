@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Media, Place, PlaceCategory } from '../../types';
+import { MapLocation, Media, Place, PlaceCategory } from '../../types';
 import MapContainer from '../MapContainer';
 import MobilePlaceMiniCard from './MobilePlaceMiniCard';
 import { MapPin, X, Heart, Sparkles, LayoutList, MapPinPlus, Waves, Mountain, UtensilsCrossed, LayoutGrid, Crosshair } from 'lucide-react';
@@ -20,6 +20,7 @@ interface MobileMapPageProps {
   onPhotoDraftEnd: () => void;
   onToggleFavorite: (id: string) => void;
   onAddToTrip: (placeId: string) => void;
+  onLocationChange?: (location: MapLocation) => void;
   categoryColors: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }>;
   categoryLabels: Record<PlaceCategory, string>;
   categoryIcons: Record<PlaceCategory, React.ReactNode>;
@@ -41,6 +42,7 @@ export default function MobileMapPage({
   onPhotoDraftEnd,
   onToggleFavorite,
   onAddToTrip,
+  onLocationChange,
   categoryColors,
   categoryLabels,
   categoryIcons,
@@ -105,6 +107,7 @@ export default function MobileMapPage({
           photoDraft={photoDraft}
           onPhotoDraftEnd={onPhotoDraftEnd}
           locateRequest={locateRequest}
+          onLocationChange={onLocationChange}
           categoryColors={categoryColors}
           categoryLabels={categoryLabels}
           categoryIcons={categoryIcons}

@@ -224,6 +224,16 @@ export interface MapMarkerSummary {
   photo_count: number;
 }
 
+export interface MapLocation {
+  latitude: number;
+  longitude: number;
+  accuracyM?: number;
+  source: 'browser' | 'manual';
+  observedAt: string;
+  address?: string;
+  name?: string;
+}
+
 export interface MediaUploadInput {
   filename: string;
   file_size: number;

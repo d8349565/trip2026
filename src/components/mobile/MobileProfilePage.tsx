@@ -71,7 +71,7 @@ export default function MobileProfilePage({
                   <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${currentUser.role === 'admin' ? 'bg-amber-400 text-slate-900' : 'bg-white/20 text-white'}`}>
                     {currentUser.role === 'admin' ? '👑 管理员' : '成员'}
                   </span>
-                  <span className="text-[12px] text-blue-100 font-semibold">旅行档案已同步</span>
+                  <span className="text-[12px] text-blue-100 font-semibold">私有数据已同步</span>
                 </div>
               </>
             ) : (
@@ -249,23 +249,18 @@ export default function MobileProfilePage({
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                alert('系统偏好已优化！如果需要恢复出厂设置或清理缓存，可在桌面端管理面板进行操作。');
-              }}
-              className="w-full flex items-center justify-between p-4.5 hover:bg-slate-50 text-left outline-none min-h-[48px]"
-            >
+            <div className="w-full flex items-center justify-between p-4.5 min-h-[48px]">
               <div className="flex items-center gap-3.5">
                 <div className="p-2 bg-slate-100 text-slate-500 rounded-xl">
                   <Settings size={18} />
                 </div>
                 <div>
-                  <p className="font-extrabold text-slate-800 text-[14px]">数据备份与缓存</p>
-                  <p className="text-[12px] text-slate-400 mt-0.5">本地存储健康度 100%、点击检测更新</p>
+                  <p className="font-extrabold text-slate-800 text-[14px]">同步与离线状态</p>
+                  <p className="text-[12px] text-slate-400 mt-0.5">已保存至私人服务器；网络中断时暂存本地</p>
                 </div>
               </div>
-              <ChevronRight size={16} className="text-slate-300" />
-            </button>
+              <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-600">已同步</span>
+            </div>
           </div>
         </div>
 

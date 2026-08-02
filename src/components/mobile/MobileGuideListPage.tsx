@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Guide, Place } from '../../types';
 import { BookOpen, Search, MapPin, Calendar, Compass, ShieldAlert, Plus, X, ArrowRight, Eye } from 'lucide-react';
+import EmptyState from '../EmptyState';
 
 interface MobileGuideListPageProps {
   guides: Guide[];
@@ -96,7 +97,7 @@ export default function MobileGuideListPage({
         <form onSubmit={handleCreateSubmit} className="bg-white rounded-2xl p-4.5 border border-blue-100 space-y-3.5 text-xs animate-in slide-in-from-top-3">
           <div className="flex justify-between items-center border-b border-slate-50 pb-1">
             <h4 className="font-extrabold text-slate-800">📝 新撰写自驾与戏水经验</h4>
-            <button type="button" onClick={() => setShowAddForm(false)} className="text-slate-400"><X size={16} /></button>
+            <button type="button" aria-label="关闭攻略编辑" onClick={() => setShowAddForm(false)} className="text-slate-400"><X size={16} /></button>
           </div>
 
           <div>
@@ -210,6 +211,22 @@ export default function MobileGuideListPage({
           );
         })}
       </div>
+
+      {filteredGuides.length === 0 && (
+        <EmptyState
+          icon={<BookOpen size={24} />}
+          title={searchQuery.trim() ? '没有找到匹配攻略' : '还没有攻略记录'}
+          description={searchQuery.trim() ? '换个关键词试试，或者清除搜索后浏览全部内容。' : '把路线、停车、装备和避坑经验写下来，下次出发会更轻松。'}
+          actionLabel={searchQuery.trim() ? '清除搜索' : '撰写第一篇攻略'}
+          onAction={() => {
+            if (searchQuery.trim()) {
+              setSearchQuery('');
+            } else {
+              setShowAddForm(true);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

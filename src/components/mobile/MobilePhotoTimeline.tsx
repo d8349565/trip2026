@@ -4,6 +4,7 @@ import { api } from '../../api';
 import { describeBrowserLocationFailure } from '../../utils/browserLocation';
 import { photoLocationFields, preparePhotoForUpload } from '../../utils/photoUpload';
 import { CATEGORY_OPTIONS } from '../../utils/categories';
+import { formatMediaDate, groupMediaByDate, sortMediaByDateDesc } from '../../utils/mediaTimeline';
 import { Clock, Image as ImageIcon, Heart, Trash2, Calendar, Grid, BookOpen, Plus, Camera, MapPin, X, Search, ChevronRight, CheckCircle2, Link2 } from 'lucide-react';
 
 const CATEGORY_EMOJI: Record<string, string> = Object.fromEntries(CATEGORY_OPTIONS.map((c) => [c.id, c.emoji]));
@@ -34,6 +35,7 @@ export default function MobilePhotoTimeline({
   const [uploadPlaceId, setUploadPlaceId] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [photoPrompt, setPhotoPrompt] = useState<{ mediaId: string; latitude?: number; longitude?: number; name?: string; address?: string; recognized: boolean; hint?: string } | null>(null);
   const [showLinkSheet, setShowLinkSheet] = useState(false);
   const [linkQuery, setLinkQuery] = useState('');
@@ -49,30 +51,15 @@ export default function MobilePhotoTimeline({
     return list;
   }, [places, linkQuery]);
 
-  // Group photos for timeline: Date -> Place -> Photos List
-  const groupedTimeline: Record<string, Record<string, Media[]>> = {};
-
-  media.forEach(item => {
-    // Determine date label
-    const rawDate = item.captured_at || item.created_at || '2026-07-14';
-    const dateObj = new Date(rawDate);
-    let dateStr = `${dateObj.getMonth() + 1}月${dateObj.getDate()}日`;
-    if (isNaN(dateObj.getTime())) {
-      dateStr = '近期上传';
-    }
-
-    // Determine place label
-    const place = places.find(p => p.id === item.place_id);
-    const placeName = place ? place.name : '散碎随拍打卡';
-
-    if (!groupedTimeline[dateStr]) {
-      groupedTimeline[dateStr] = {};
-    }
-    if (!groupedTimeline[dateStr][placeName]) {
-      groupedTimeline[dateStr][placeName] = [];
-    }
-    groupedTimeline[dateStr][placeName].push(item);
-  });
+  const groupedTimeline = useMemo(() => groupMediaByDate(media).map(({ dateKey, photos }) => {
+    const groupedByPlace: Record<string, Media[]> = {};
+    photos.forEach((photo) => {
+      const place = places.find((item) => item.id === photo.place_id);
+      const placeName = place ? place.name : '散碎随拍打卡';
+      (groupedByPlace[placeName] ??= []).push(photo);
+    });
+    return { dateKey, groups: Object.entries(groupedByPlace) };
+  }), [media, places]);
 
   const handleFileChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -81,6 +68,7 @@ export default function MobilePhotoTimeline({
     const file = e.target.files?.[0];
     if (!file || isUploading) return;
     setIsUploading(true);
+    setUploadError('');
     try {
       // Read EXIF from the original file, then compress so the payload stays
       // under the server's 10 MB JSON limit (raw phone photos exceed it).
@@ -120,7 +108,7 @@ export default function MobilePhotoTimeline({
       }
       setShowUploadModal(false);
     } catch (err) {
-      alert(err instanceof Error ? err.message : '上传失败');
+      setUploadError(err instanceof Error ? err.message : '上传失败，请重试。');
     } finally {
       setIsUploading(false);
     }
@@ -217,6 +205,7 @@ export default function MobilePhotoTimeline({
           id="m_trigger_upload"
           onClick={() => {
             setUploadPlaceId('');
+            setUploadError('');
             setShowUploadModal(true);
           }}
           className="px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center gap-1 active:scale-95 transition-all outline-none"
@@ -227,26 +216,36 @@ export default function MobilePhotoTimeline({
       </div>
 
       {media.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-slate-100 shadow-xs">
+        <div className="text-center py-16 px-5 bg-white rounded-2xl border border-slate-100 shadow-xs">
           <ImageIcon size={40} className="text-slate-300 mx-auto" />
-          <p className="text-xs text-slate-400 mt-2.5">暂无任何照片，开启您的自驾采风之旅吧！</p>
+          <p className="text-xs text-slate-500 font-semibold mt-2.5">还没有旅行照片</p>
+          <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">上传第一张照片后，可以识别位置、关联地点并整理成时间轴。</p>
+          <button
+            type="button"
+            onClick={() => {
+              setUploadError('');
+              setShowUploadModal(true);
+            }}
+            className="mt-4 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-blue-500/20 active:scale-95"
+          >
+            上传第一张照片
+          </button>
         </div>
       ) : viewMode === 'timeline' ? (
         /* Timeline view */
         <div className="space-y-5">
-          {Object.keys(groupedTimeline).map(dateStr => (
-            <div key={dateStr} className="space-y-3.5">
+          {groupedTimeline.map(({ dateKey, groups }) => (
+            <div key={dateKey} className="space-y-3.5">
               {/* Date Header */}
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0"></div>
-                <h3 className="font-extrabold text-sm text-slate-800">{dateStr}</h3>
+                <h3 className="font-extrabold text-sm text-slate-800">{formatMediaDate(dateKey)}</h3>
                 <div className="flex-1 h-[1px] bg-slate-100"></div>
               </div>
 
               {/* Places sections inside this date */}
               <div className="space-y-4 pl-4 border-l border-slate-100 ml-1">
-                {Object.keys(groupedTimeline[dateStr]).map(placeName => {
-                  const photos = groupedTimeline[dateStr][placeName];
+                {groups.map(([placeName, photos]) => {
                   return (
                     <div key={placeName} className="space-y-2">
                       <p className="text-[11px] font-black text-slate-400 flex items-center gap-1 uppercase tracking-wider">
@@ -286,7 +285,7 @@ export default function MobilePhotoTimeline({
       ) : (
         /* Grid view */
         <div className="grid grid-cols-2 gap-3 animate-in fade-in-50 duration-150">
-          {media.map(photo => (
+          {sortMediaByDateDesc(media).map(photo => (
             <div
               key={photo.id}
               id={`m_photo_grid_item_${photo.id}`}
@@ -319,10 +318,12 @@ export default function MobilePhotoTimeline({
           <div className="relative w-full bg-white rounded-t-3xl shadow-2xl z-10 p-5 space-y-4 max-h-[80vh] overflow-y-auto animate-slide-up">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <h4 className="font-extrabold text-slate-800 text-sm">📷 上传精彩瞬间照片</h4>
-              <button onClick={() => setShowUploadModal(false)} className="p-1 rounded-full bg-slate-100 text-slate-500 outline-none">
+              <button aria-label="关闭照片上传" onClick={() => setShowUploadModal(false)} className="p-1 rounded-full bg-slate-100 text-slate-500 outline-none">
                 <X size={16} />
               </button>
             </div>
+
+            {uploadError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-bold leading-relaxed text-rose-700">{uploadError}</p>}
 
             <div className="space-y-4 text-xs">
               <div className="space-y-1">

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Place, PlaceCategory, Trip, TripDay, TripItem, Guide, Checklist, ChecklistItem, Media, User, InviteCode, Visit, type MediaUploadInput } from './types';
+import { MapLocation, Place, PlaceCategory, Trip, TripDay, TripItem, Guide, Checklist, ChecklistItem, Media, User, InviteCode, Visit, type MediaUploadInput } from './types';
 import { api } from './api';
 
 // Components
@@ -36,6 +36,7 @@ import MobileDaySelectorSheet from './components/mobile/MobileDaySelectorSheet';
 import MobileQuickVisitSheet from './components/mobile/MobileQuickVisitSheet';
 import MobileAddPlaceToTripSheet from './components/mobile/MobileAddPlaceToTripSheet';
 import MobileVisitListPage from './components/mobile/MobileVisitListPage';
+import FeedbackBanner from './components/FeedbackBanner';
 
 // Icons
 import { 
@@ -99,6 +100,7 @@ export default function App() {
   const [mobileSelectedPlaceDetail, setMobileSelectedPlaceDetail] = useState<Place | null>(null);
   const [mobileTripTab, setMobileTripTab] = useState<'today' | 'manage'>('today');
   const [showMobileCreateSheet, setShowMobileCreateSheet] = useState(false);
+  const [mobileCreateTripRequest, setMobileCreateTripRequest] = useState(0);
 
   // Mobile active trip and active day selectors states with persistence
   const [activeTripId, setActiveTripId] = useState<string | null>(() => {
@@ -115,6 +117,12 @@ export default function App() {
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [viewMode, setViewMode] = useState<'map' | 'trip' | 'photos' | 'checklist' | 'guide' | 'settings'>('map');
+
+  const openMobileCreateTrip = () => {
+    setViewMode('trip');
+    setMobileTripTab('manage');
+    setMobileCreateTripRequest(request => request + 1);
+  };
 
   // Database core state lists
   const [places, setPlaces] = useState<Place[]>([]);
@@ -137,6 +145,10 @@ export default function App() {
 
   // Focus detail selected place state
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [userLocation, setUserLocation] = useState<MapLocation | null>(null);
+  const [feedback, setFeedback] = useState<{ message: string; tone: 'success' | 'error' | 'info' } | null>(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [dataError, setDataError] = useState('');
 
   // Active navigation states for deeper linkages
   const [activePhotoPlaceId, setActivePhotoPlaceId] = useState<string | null>(null);
@@ -244,73 +256,76 @@ export default function App() {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [authError, setAuthError] = useState('');
 
+  const notify = (message: string, tone: 'success' | 'error' | 'info' = 'info') => {
+    setFeedback({ message, tone });
+  };
+
   useEffect(() => {
     // Initial auth & content fetch
     checkAuthAndFetch();
   }, []);
 
   const checkAuthAndFetch = async () => {
+    setIsLoadingData(true);
+    let authRes: { user: User };
     try {
-      const authRes = await api.getSessionUser();
-      setCurrentUser(authRes.user);
-      await reloadAllData(authRes.user);
+      authRes = await api.getSessionUser();
     } catch (e) {
       setCurrentUser(null);
       setShowLoginModal(true);
+      setIsLoadingData(false);
+      return;
+    }
+
+    setCurrentUser(authRes.user);
+    try {
+      await reloadAllData(authRes.user);
+    } catch (e) {
+      // reloadAllData already exposes an actionable inline error.
+      console.error('Initial dashboard data load failed', e);
+    } finally {
+      setIsLoadingData(false);
     }
   };
 
   const reloadAllData = async (sessionUser: User | null = currentUser) => {
+    setIsLoadingData(true);
+    setDataError('');
     try {
-      const placesData = await api.getPlaces();
+      const invitesPromise = sessionUser?.role === 'admin'
+        ? api.getInvites()
+        : Promise.resolve<InviteCode[]>([]);
+      const [placesData, tripsData, mediaData, guidesData, invitesData, checklistsData, visitsData] = await Promise.all([
+        api.getPlaces(),
+        api.getTrips(),
+        api.getMedia(),
+        api.getGuides(),
+        invitesPromise,
+        api.getChecklists(),
+        api.getVisits(),
+      ]);
+
+      const tripDetails = await Promise.all(tripsData.map((trip) => api.getTripDetails(trip.id)));
+      const checklistDetails = await Promise.all(checklistsData.map((checklist) => api.getChecklistDetails(checklist.id)));
+
       setPlaces(placesData);
-
-      const tripsData = await api.getTrips();
       setTrips(tripsData);
-
-      // Fetch active trips details to load days & items
-      if (tripsData.length > 0) {
-        let allDays: TripDay[] = [];
-        let allItems: TripItem[] = [];
-        for (const t of tripsData) {
-          const details = await api.getTripDetails(t.id);
-          if (details.days) allDays = [...allDays, ...details.days];
-          if (details.items) allItems = [...allItems, ...details.items];
-        }
-        setTripDays(allDays);
-        setTripItems(allItems);
-      }
-
-      const mediaData = await api.getMedia();
+      setTripDays(tripDetails.flatMap((details) => details.days ?? []));
+      setTripItems(tripDetails.flatMap((details) => details.items ?? []));
       setMedia(mediaData);
-
-      const guidesData = await api.getGuides();
       setGuides(guidesData);
-
-      if (sessionUser?.role === 'admin') {
-        const invitesData = await api.getInvites();
-        setInvites(invitesData);
-      } else {
-        setInvites([]);
-      }
-
-      const checklistsData = await api.getChecklists();
+      setInvites(invitesData);
       setChecklists(checklistsData);
-
-      let allChecklistItems: ChecklistItem[] = [];
-      for (const cl of checklistsData) {
-        const details = await api.getChecklistDetails(cl.id);
-        if (details.items) {
-          allChecklistItems = [...allChecklistItems, ...details.items];
-        }
-      }
-      setChecklistItems(allChecklistItems);
-
-      const visitsData = await api.getVisits();
+      setChecklistItems(checklistDetails.flatMap((details) => details.items ?? []));
       setVisits(visitsData);
-
     } catch (e) {
       console.error('Error fetching dashboard data', e);
+      const message = '数据加载失败，已有内容已保留；请重试。';
+      setDataError(message);
+      notify(message, 'error');
+      throw e;
+    } finally {
+      setIsLoadingData(false);
     }
   };
 
@@ -339,7 +354,7 @@ export default function App() {
         setSelectedPlace(updated);
       }
     } catch (e) {
-      alert('收藏状态更新失败');
+      notify('收藏状态更新失败，请重试。', 'error');
     }
   };
 
@@ -352,7 +367,7 @@ export default function App() {
         setSelectedPlace(updated);
       }
     } catch (e) {
-      alert('到访状态更新失败');
+      notify('到访状态更新失败，请重试。', 'error');
     }
   };
 
@@ -362,7 +377,8 @@ export default function App() {
       await api.addToTrip(placeId, { trip_day_id: tripDayId, type, start_time: time, note });
       await reloadAllData();
     } catch (e) {
-      alert('加入日程失败');
+      notify('加入日程失败，请检查目标日期后重试。', 'error');
+      throw e;
     }
   };
 
@@ -408,7 +424,7 @@ export default function App() {
         const res = await api.sessionRegister(loginUsername, loginPassword, inviteCode);
         authenticatedUser = res.user;
         setCurrentUser(res.user);
-        alert('邀请码校验成功，注册并登录成功！');
+        notify('邀请码校验成功，注册并登录成功。', 'success');
       } else {
         const res = await api.sessionLogin(loginUsername, loginPassword);
         authenticatedUser = res.user;
@@ -428,7 +444,7 @@ export default function App() {
     setTrips([]);
     setMedia([]);
     setShowLoginModal(true);
-    alert('已安全退出私有会话');
+    notify('已安全退出私有会话。', 'success');
   };
 
   // Add Trip
@@ -437,7 +453,7 @@ export default function App() {
       await api.createTrip(tripData, currentUser?.id);
       await reloadAllData();
     } catch (e) {
-      alert('行程创建失败');
+      notify('行程创建失败，请检查日期和必填信息。', 'error');
     }
   };
 
@@ -447,7 +463,7 @@ export default function App() {
         await api.deleteTrip(id);
         await reloadAllData();
       } catch (e) {
-        alert('删除失败');
+        notify('删除失败，请重试。', 'error');
       }
     }
   };
@@ -458,7 +474,7 @@ export default function App() {
       await api.createTripItem(dayId, itemData);
       await reloadAllData();
     } catch (e) {
-      alert('添加项目项失败');
+      notify('添加安排失败，请重试。', 'error');
     }
   };
 
@@ -467,7 +483,7 @@ export default function App() {
       await api.updateTripItem(itemId, data);
       await reloadAllData();
     } catch (e) {
-      alert('更新日程项目失败');
+      notify('更新日程项目失败，请重试。', 'error');
     }
   };
 
@@ -476,7 +492,7 @@ export default function App() {
       await api.deleteTripItem(itemId);
       await reloadAllData();
     } catch (e) {
-      alert('删除失败');
+      notify('删除失败，请重试。', 'error');
     }
   };
 
@@ -485,9 +501,10 @@ export default function App() {
       // Server marks the place as visited for the current user; do not toggle again.
       const created = await api.createVisit(visitData);
       await reloadAllData();
+      notify('到访已记录，地点已标记为已去过。', 'success');
       return created;
     } catch (e) {
-      alert('到访记录打卡失败');
+      notify('到访记录保存失败，请重试。', 'error');
       throw e;
     }
   };
@@ -497,7 +514,7 @@ export default function App() {
       await api.updateTripDay(dayId, data);
       await reloadAllData();
     } catch (e) {
-      alert('日日程摘要更新失败');
+      notify('日程摘要更新失败，请重试。', 'error');
     }
   };
 
@@ -506,10 +523,11 @@ export default function App() {
     try {
       const created = await api.uploadMedia(data, currentUser?.id);
       await reloadAllData();
+      notify('照片已上传并同步。', 'success');
       return created;
     } catch (e) {
-      alert(e instanceof Error && e.message ? e.message : '照片存储失败');
-      return undefined;
+      notify(e instanceof Error && e.message ? e.message : '照片存储失败，请重试。', 'error');
+      throw e;
     }
   };
 
@@ -556,7 +574,7 @@ export default function App() {
       setPendingPhotoDraft(null);
     } catch (error) {
       console.error('照片关联已有地点失败', error);
-      alert('关联失败，请重试');
+      notify('照片关联失败，请重试。', 'error');
     }
   };
 
@@ -566,7 +584,7 @@ export default function App() {
         await api.deleteMedia(id);
         await reloadAllData();
       } catch (e) {
-        alert('删除失败');
+        notify('删除失败，请重试。', 'error');
       }
     }
   };
@@ -576,7 +594,7 @@ export default function App() {
       await api.updateMedia(id, { favorite: fav });
       await reloadAllData();
     } catch (e) {
-      alert('更新失败');
+      notify('照片更新失败，请重试。', 'error');
     }
   };
 
@@ -587,7 +605,7 @@ export default function App() {
       setPlaces((current) => current.map((item) => item.id === placeId ? updated : item));
       if (selectedPlace?.id === placeId) setSelectedPlace(updated);
     } catch (e) {
-      alert('设置封面失败');
+      notify('设置封面失败，请重试。', 'error');
     }
   };
 
@@ -597,7 +615,7 @@ export default function App() {
       await api.createChecklistFromTemplate({ title, trip_id: tripId || undefined, template_type: templateType }, currentUser?.id);
       await reloadAllData();
     } catch (e) {
-      alert('导入失败');
+      notify('清单导入失败，请重试。', 'error');
     }
   };
 
@@ -606,7 +624,7 @@ export default function App() {
       await api.createChecklistItem(checklistId, { name, quantity, owner, category, source });
       await reloadAllData();
     } catch (e) {
-      alert('添加失败');
+      notify('清单项添加失败，请重试。', 'error');
     }
   };
 
@@ -615,7 +633,7 @@ export default function App() {
       await api.updateChecklistItem(itemId, data);
       await reloadAllData();
     } catch (e) {
-      alert('更新失败');
+      notify('清单项更新失败，请重试。', 'error');
     }
   };
 
@@ -624,7 +642,7 @@ export default function App() {
       await api.deleteChecklistItem(itemId);
       await reloadAllData();
     } catch (e) {
-      alert('删除失败');
+      notify('清单项删除失败，请重试。', 'error');
     }
   };
 
@@ -634,7 +652,7 @@ export default function App() {
       await api.createGuide(guideData, currentUser?.id);
       await reloadAllData();
     } catch (e) {
-      alert('攻略保存失败');
+      notify('攻略保存失败，请重试。', 'error');
     }
   };
 
@@ -643,7 +661,7 @@ export default function App() {
       await api.updateGuide(id, guideData);
       await reloadAllData();
     } catch (e) {
-      alert('修改失败');
+      notify('攻略修改失败，请重试。', 'error');
     }
   };
 
@@ -652,7 +670,7 @@ export default function App() {
       await api.deleteGuide(id);
       await reloadAllData();
     } catch (e) {
-      alert('删除失败');
+      notify('攻略删除失败，请重试。', 'error');
     }
   };
 
@@ -660,9 +678,9 @@ export default function App() {
     try {
       await api.createInvite({ code, max_uses: maxUses, expires_at: expiresAt }, currentUser?.id);
       await reloadAllData();
-      alert('邀请码口令已成功注册至服务器');
+      notify('邀请码已成功保存到服务器。', 'success');
     } catch (e) {
-      alert('创建失败，口令可能冲突');
+      notify('创建失败，邀请码可能已存在或格式不正确。', 'error');
     }
   };
 
@@ -686,7 +704,23 @@ export default function App() {
     const todayItems = activeDay ? tripItems.filter(item => item.trip_day_id === activeDay.id).sort((a, b) => a.sort_order - b.sort_order) : [];
 
     return (
-      <div className="h-screen w-screen flex flex-col bg-slate-50/50 overflow-hidden text-slate-800 relative font-sans select-none" style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))' }}>
+      <div className="h-screen w-screen flex flex-col bg-slate-50/50 overflow-hidden text-slate-800 relative font-sans select-none" style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))' }} aria-busy={isLoadingData}>
+        {feedback && (
+          <div className="fixed left-1/2 top-3 z-[70] w-[min(420px,calc(100%-2rem))] -translate-x-1/2">
+            <FeedbackBanner message={feedback.message} tone={feedback.tone} onDismiss={() => setFeedback(null)} />
+          </div>
+        )}
+        {dataError && (
+          <div className="fixed bottom-20 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 shadow-lg">
+            <span className="text-[11px] font-semibold text-rose-700">{dataError}</span>
+            <button type="button" onClick={() => void reloadAllData()} className="rounded-lg bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700 hover:bg-rose-100">重试</button>
+          </div>
+        )}
+        {isLoadingData && currentUser && (
+          <div className="fixed left-1/2 top-0 z-[65] -translate-x-1/2 rounded-b-xl bg-blue-600 px-3 py-1 text-[10px] font-bold text-white shadow-md" role="status" aria-live="polite">
+            正在同步旅行资料…
+          </div>
+        )}
         
         {/* 1. Page Header (Conditional depending on active tab) */}
         {viewMode !== 'map' && (
@@ -712,7 +746,7 @@ export default function App() {
                   {viewMode === 'photos' && `${media.length} 张`}
                   {viewMode === 'checklist' && `${checklists.length} 个清单`}
                   {viewMode === 'guide' && `${guides.length} 篇`}
-                  {viewMode === 'settings' && '本地存储'}
+                  {viewMode === 'settings' && '服务器已同步'}
                 </p>
               </div>
             </div>
@@ -744,6 +778,7 @@ export default function App() {
                 onRequestEditor={requestMapEditor}
                 editorRequest={mapEditorRequest}
                 editRequest={mapEditRequest}
+                onLocationChange={(location) => setUserLocation(location)}
                 photoDraft={pendingPhotoDraft}
                 onPhotoDraftEnd={() => setPendingPhotoDraft(null)}
                 onToggleFavorite={handleToggleFavorite}
@@ -799,6 +834,7 @@ export default function App() {
                     }
                   }}
                   onOpenTripSelector={() => setShowTripSelector(true)}
+                  onOpenCreateTrip={openMobileCreateTrip}
                   onOpenDaySelector={() => setShowDaySelector(true)}
                   allDays={activeDays}
                 />
@@ -809,6 +845,7 @@ export default function App() {
                   allItems={tripItems}
                   places={places}
                   activeTrip={activeTrip}
+                  createTripRequest={mobileCreateTripRequest}
                   onSelectTrip={handleSelectTrip}
                   onDeleteTrip={handleDeleteTrip}
                   onCreateTrip={handleCreateTrip}
@@ -963,8 +1000,7 @@ export default function App() {
               } else if (action === 'log_visit') {
                 setShowQuickVisit(true);
               } else if (action === 'create_trip') {
-                setViewMode('trip');
-                setMobileTripTab('manage');
+                openMobileCreateTrip();
               } else if (action === 'upload_photo') {
                 setViewMode('photos');
               } else if (action === 'create_checklist') {
@@ -1046,11 +1082,11 @@ export default function App() {
         )}
 
         {showLoginModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl w-full max-w-xs p-5 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4" role="presentation">
+            <div className="bg-white rounded-3xl w-full max-w-xs p-5 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95" role="dialog" aria-modal="true" aria-labelledby="mobile-auth-title">
               <div className="flex items-center justify-between">
-                <h4 className="font-extrabold text-slate-800 text-xs">{isRegisterMode ? '🔐 受邀注册新成员' : '🔑 成员安全登录'}</h4>
-                <button onClick={() => { setAuthError(''); setShowLoginModal(false); }} className="p-1 rounded-full bg-slate-100 text-slate-500"><X size={15} /></button>
+                <h4 id="mobile-auth-title" className="font-extrabold text-slate-800 text-xs">{isRegisterMode ? '🔐 受邀注册新成员' : '🔑 成员安全登录'}</h4>
+                <button aria-label="关闭登录窗口" onClick={() => { setAuthError(''); setShowLoginModal(false); }} className="p-1 rounded-full bg-slate-100 text-slate-500"><X size={15} /></button>
               </div>
 
               {authError && <p className="text-[10px] font-bold text-red-600 bg-red-50 p-2 rounded-lg">{authError}</p>}
@@ -1058,16 +1094,16 @@ export default function App() {
               <form onSubmit={handleAuthSubmit} className="space-y-3 text-xs">
                 <div>
                   <label className="text-[10px] font-black text-slate-400">用户名</label>
-                  <input type="text" value={loginUsername} onChange={e => setLoginUsername(e.target.value)} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl outline-none" required />
+                  <input aria-label="用户名" type="text" value={loginUsername} onChange={e => setLoginUsername(e.target.value)} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl outline-none" required />
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-slate-400">密码</label>
-                  <input type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl outline-none" required />
+                  <input aria-label="密码" type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl outline-none" required />
                 </div>
                 {isRegisterMode && (
                   <div>
                     <label className="text-[10px] font-black text-slate-400">专属邀请码</label>
-                    <input type="text" placeholder="从主管理员处获取邀请码" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl outline-none" required />
+                    <input aria-label="专属邀请码" type="text" placeholder="从主管理员处获取邀请码" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl outline-none" required />
                   </div>
                 )}
                 <button type="submit" className="w-full py-2 bg-blue-600 text-white font-bold rounded-xl">{isRegisterMode ? '确认注册' : '立即验证'}</button>
@@ -1084,7 +1120,23 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen bg-[#f8fafc] overflow-hidden text-slate-800">
+    <div className="flex flex-col lg:flex-row h-screen bg-[#f8fafc] overflow-hidden text-slate-800" aria-busy={isLoadingData}>
+      {feedback && (
+        <div className="fixed left-1/2 top-3 z-[70] w-[min(420px,calc(100%-2rem))] -translate-x-1/2">
+          <FeedbackBanner message={feedback.message} tone={feedback.tone} onDismiss={() => setFeedback(null)} />
+        </div>
+      )}
+      {isLoadingData && currentUser && (
+        <div className="fixed left-1/2 top-0 z-[65] -translate-x-1/2 rounded-b-xl bg-blue-600 px-3 py-1 text-[10px] font-bold text-white shadow-md" role="status" aria-live="polite">
+          正在同步旅行资料…
+        </div>
+      )}
+      {dataError && (
+        <div className="fixed bottom-4 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 shadow-lg">
+          <span className="text-xs font-semibold text-rose-700">{dataError}</span>
+          <button type="button" onClick={() => void reloadAllData()} className="rounded-lg bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700 hover:bg-rose-100">重新加载</button>
+        </div>
+      )}
       
       {/* -------------------- 1. SIDEBAR (DESKTOP) -------------------- */}
       {!isMobile && (
@@ -1532,10 +1584,11 @@ export default function App() {
                   media={media}
                   selectedPlace={selectedPlace}
                   onSelectPlace={(p) => setSelectedPlace(p)}
-                  onCreatePlace={handleCreatePlace}
-                  onUpdatePlace={handleUpdatePlace}
-                  onDeletePlace={handleDeletePlace}
-                  editorRequest={mapEditorRequest}
+                    onCreatePlace={handleCreatePlace}
+                    onUpdatePlace={handleUpdatePlace}
+                    onDeletePlace={handleDeletePlace}
+                    onLocationChange={(location) => setUserLocation(location)}
+                    editorRequest={mapEditorRequest}
                   editRequest={mapEditRequest}
                   photoDraft={pendingPhotoDraft}
                   onPhotoDraftEnd={() => setPendingPhotoDraft(null)}
@@ -1556,6 +1609,7 @@ export default function App() {
                     media={media}
                     guides={guides}
                     visits={visits}
+                    userLocation={userLocation}
                     onClose={() => setSelectedPlace(null)}
                     onToggleFavorite={handleToggleFavorite}
                     onToggleVisited={handleToggleVisited}
@@ -1671,6 +1725,7 @@ export default function App() {
                 media={media}
                 guides={guides}
                 visits={visits}
+                userLocation={userLocation}
                 onClose={() => setSelectedPlace(null)}
                 onToggleFavorite={handleToggleFavorite}
                 onToggleVisited={handleToggleVisited}
@@ -1736,13 +1791,14 @@ export default function App() {
 
       {/* LOGIN & REGISTER BY INVITE MODAL */}
       {showLoginModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="presentation">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95 duration-150" role="dialog" aria-modal="true" aria-labelledby="desktop-auth-title">
             <div className="flex items-center justify-between">
-              <h4 className="font-extrabold text-slate-800 text-sm">
+              <h4 id="desktop-auth-title" className="font-extrabold text-slate-800 text-sm">
                 {isRegisterMode ? '🔐 受邀注册新成员' : '🔑 成员安全口令登录'}
               </h4>
               <button 
+                aria-label="关闭登录窗口"
                 onClick={() => {
                   setAuthError('');
                   setShowLoginModal(false);
@@ -1765,6 +1821,7 @@ export default function App() {
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">用户名</label>
                 <input 
                   type="text" 
+                  aria-label="用户名"
                   placeholder="输入您的成员名"
                   value={loginUsername}
                   onChange={(e) => setLoginUsername(e.target.value)}
@@ -1777,6 +1834,7 @@ export default function App() {
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">访问密码</label>
                 <input 
                   type="password" 
+                  aria-label="密码"
                   placeholder="安全授权密码"
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
@@ -1790,6 +1848,7 @@ export default function App() {
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">专属邀请授权口令</label>
                   <input 
                     type="text" 
+                    aria-label="专属邀请码"
                     placeholder="请输入管理员分发的受邀码"
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value.toUpperCase())}

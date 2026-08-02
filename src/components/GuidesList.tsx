@@ -9,6 +9,7 @@ import {
   BookOpen, Search, Clock, ArrowLeft, Heart, Eye, MapPin, Plus, X,
   Edit3, AlertTriangle, ShieldAlert, ChevronRight, Check, Trash2, Bookmark
 } from 'lucide-react';
+import EmptyState from './EmptyState';
 
 interface GuidesListProps {
   guides: Guide[];
@@ -283,10 +284,13 @@ export default function GuidesList({
           {/* Guides grid list with metadata tags */}
           <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 py-1 scrollbar-thin">
             {filteredGuides.length === 0 ? (
-              <div className="py-20 text-center text-slate-400 text-xs space-y-2">
-                <BookOpen size={28} className="mx-auto text-slate-300" />
-                <p>暂无攻略沉淀</p>
-              </div>
+              <EmptyState
+                icon={<BookOpen size={26} />}
+                title={searchQuery ? '没有匹配的攻略' : '还没有攻略沉淀'}
+                description={searchQuery ? '换一个关键词，或清空搜索后查看全部经验。' : '把停车、避堵、玩水安全和亲子注意事项记录下来，下一次出发就不用重新踩坑。'}
+                actionLabel={searchQuery ? '清空搜索' : '撰写第一篇攻略'}
+                onAction={() => searchQuery ? setSearchQuery('') : setShowCreateModal(true)}
+              />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredGuides.map((guide) => {
