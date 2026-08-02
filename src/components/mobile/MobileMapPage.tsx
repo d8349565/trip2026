@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { MapLocation, Media, Place, PlaceCategory } from '../../types';
 import MapContainer from '../MapContainer';
 import MobilePlaceMiniCard from './MobilePlaceMiniCard';
-import { MapPin, X, Heart, Sparkles, LayoutList, MapPinPlus, Waves, Mountain, UtensilsCrossed, LayoutGrid, Crosshair } from 'lucide-react';
+import { MapPin, X, Heart, Sparkles, LayoutList, MapPinPlus, Waves, Mountain, UtensilsCrossed, LayoutGrid, Crosshair, LocateFixed } from 'lucide-react';
 
 interface MobileMapPageProps {
   places: Place[];
@@ -52,6 +52,7 @@ export default function MobileMapPage({
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [showListView, setShowListView] = useState(false);
   const [locateRequest, setLocateRequest] = useState(0);
+  const [fitAllRequest, setFitAllRequest] = useState(0);
 
   // States from Filter sheet
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('');
@@ -88,6 +89,17 @@ export default function MobileMapPage({
     { key: 'food', label: '美食', icon: <UtensilsCrossed size={14} /> },
   ];
 
+  const showAllPlaces = () => {
+    setSearchQuery('');
+    setActiveCategory('');
+    setSelectedDifficulty('');
+    setWetFilter(false);
+    setFavoritesOnly(false);
+    setRecommendedOnly(false);
+    onSelectPlace(null);
+    setFitAllRequest((request) => request + 1);
+  };
+
 
   return (
     <div className="flex-1 h-full w-full relative flex flex-col overflow-hidden select-none">
@@ -108,6 +120,8 @@ export default function MobileMapPage({
           onPhotoDraftEnd={onPhotoDraftEnd}
           locateRequest={locateRequest}
           onLocationChange={onLocationChange}
+          fitAllRequest={fitAllRequest}
+          onShowAllPlaces={showAllPlaces}
           categoryColors={categoryColors}
           categoryLabels={categoryLabels}
           categoryIcons={categoryIcons}
@@ -138,6 +152,16 @@ export default function MobileMapPage({
               >
                 <Sparkles size={13} className="text-violet-400" />
                 <span>筛选</span>
+              </button>
+
+              <button
+                id="m_btn_show_all_places"
+                aria-label="显示全部地点"
+                onClick={showAllPlaces}
+                className="px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border border-white/50 bg-white/70 text-slate-500 backdrop-blur-sm outline-none shrink-0 flex items-center gap-1.5 shadow-sm hover:bg-white/90 active:scale-[0.96] transition-all duration-200"
+              >
+                <LocateFixed size={13} />
+                <span>全图</span>
               </button>
 
               <button

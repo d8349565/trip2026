@@ -56,7 +56,7 @@ export interface Place {
   safety_notes?: string;
   packing_list?: string;
   nearby_services?: string;
-  rating?: number; // 1-5
+  rating?: number | null; // 1-5；数据库未评分时为 null
   status: 'want_to_go' | 'visited';
   visibility: 'private' | 'shared';
   favorite: boolean;

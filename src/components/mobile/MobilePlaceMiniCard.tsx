@@ -1,6 +1,7 @@
 import React from 'react';
 import { Place, PlaceCategory, Trip } from '../../types';
 import { Star, MapPin, Calendar, BookOpen, ChevronRight, X } from 'lucide-react';
+import { formatPlaceRating } from '../../utils/placeRating';
 
 interface MobilePlaceMiniCardProps {
   place: Place;
@@ -28,7 +29,7 @@ export default function MobilePlaceMiniCard({
   const colorConfig = categoryColors[place.category_id] || { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' };
 
   return (
-    <div className="absolute bottom-4 inset-x-4 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-100/80 p-4 z-40 flex flex-col animate-slide-up select-none">
+    <div className="absolute bottom-[calc(5rem+env(safe-area-inset-bottom))] inset-x-4 max-h-[calc(100%-7rem)] overflow-y-auto bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-100/80 p-4 z-40 flex flex-col animate-slide-up select-none">
       {/* Top row with Title and Close */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -66,7 +67,7 @@ export default function MobilePlaceMiniCard({
           <div>
             <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold">
               <span className="flex items-center text-amber-500 font-black">
-                ★ {place.rating ? place.rating.toFixed(1) : '未评分'}
+                ★ {formatPlaceRating(place.rating)}
               </span>
               <span className="text-slate-300">|</span>
               <span className="flex items-center gap-0.5 truncate">

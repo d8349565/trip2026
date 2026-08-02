@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Place, PlaceCategory, Trip, TripDay, Media, Visit, Guide, type MediaUploadInput } from '../../types';
 import MobileAddPlaceToTripSheet from './MobileAddPlaceToTripSheet';
 import { photoLocationFields, preparePhotoForUpload } from '../../utils/photoUpload';
+import { formatPlaceRating } from '../../utils/placeRating';
 import { 
   Heart, Star, MapPin, X, ImageIcon, Clock, BookOpen, 
   DollarSign, Compass, Calendar, Check, User, Plus, 
@@ -188,7 +189,7 @@ export default function MobilePlaceDetailPage({
               <span>{categoryLabels[place.category_id]}</span>
             </span>
             <div className="flex items-center gap-0.5 text-amber-400 font-extrabold text-xs">
-              ★ {place.rating ? place.rating.toFixed(1) : '未评分'}
+              ★ {formatPlaceRating(place.rating)}
             </div>
           </div>
           <h1 className="text-lg font-black mt-1.5 drop-shadow-md truncate">{place.name}</h1>

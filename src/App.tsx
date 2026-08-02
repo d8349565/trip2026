@@ -37,6 +37,7 @@ import MobileQuickVisitSheet from './components/mobile/MobileQuickVisitSheet';
 import MobileAddPlaceToTripSheet from './components/mobile/MobileAddPlaceToTripSheet';
 import MobileVisitListPage from './components/mobile/MobileVisitListPage';
 import FeedbackBanner from './components/FeedbackBanner';
+import { mergeVisitRatings } from './utils/placeRating';
 
 // Icons
 import { 
@@ -142,6 +143,7 @@ export default function App() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(false);
   const [difficultyFilter, setDifficultyFilter] = useState<string>('');
   const [isWetFilter, setIsWetFilter] = useState<boolean>(false);
+  const [mapFitRequest, setMapFitRequest] = useState(0);
 
   // Focus detail selected place state
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
@@ -308,7 +310,7 @@ export default function App() {
       const tripDetails = await Promise.all(tripsData.map((trip) => api.getTripDetails(trip.id)));
       const checklistDetails = await Promise.all(checklistsData.map((checklist) => api.getChecklistDetails(checklist.id)));
 
-      setPlaces(placesData);
+      setPlaces(mergeVisitRatings(placesData, visitsData));
       setTrips(tripsData);
       setTripDays(tripDetails.flatMap((details) => details.days ?? []));
       setTripItems(tripDetails.flatMap((details) => details.items ?? []));
@@ -344,6 +346,16 @@ export default function App() {
     }
     return true;
   });
+
+  const handleShowAllPlaces = () => {
+    setSelectedCategory('');
+    setSearchQuery('');
+    setShowFavoritesOnly(false);
+    setDifficultyFilter('');
+    setIsWetFilter(false);
+    setSelectedPlace(null);
+    setMapFitRequest((request) => request + 1);
+  };
 
   // Action: Toggle favorites
   const handleToggleFavorite = async (id: string) => {
@@ -1588,6 +1600,8 @@ export default function App() {
                     onUpdatePlace={handleUpdatePlace}
                     onDeletePlace={handleDeletePlace}
                     onLocationChange={(location) => setUserLocation(location)}
+                    fitAllRequest={mapFitRequest}
+                    onShowAllPlaces={handleShowAllPlaces}
                     editorRequest={mapEditorRequest}
                   editRequest={mapEditRequest}
                   photoDraft={pendingPhotoDraft}

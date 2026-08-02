@@ -54,6 +54,10 @@ interface MapContainerProps {
   /** 手机端定位按钮通过递增 token 触发地图重新定位。 */
   locateRequest?: number;
   onLocationChange?: (location: MapLocation) => void;
+  /** 请求在筛选条件更新后重新将当前全部地点纳入视野。 */
+  fitAllRequest?: number;
+  /** 点击“显示全部地点”时由外层重置筛选条件。 */
+  onShowAllPlaces?: () => void;
   categoryColors: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }>;
   categoryLabels: Record<PlaceCategory, string>;
   categoryIcons: Record<PlaceCategory, React.ReactNode>;
@@ -188,6 +192,8 @@ export default function MapContainer({
   onSavePhoto,
   locateRequest = 0,
   onLocationChange,
+  fitAllRequest = 0,
+  onShowAllPlaces,
   categoryLabels,
   searchSlot,
 }: MapContainerProps) {
@@ -263,6 +269,14 @@ export default function MapContainer({
       mobile ? [150, 36, 120, 36] : [72, 72, 72, 72],
       15,
     );
+  };
+
+  const requestFitAllPlaces = () => {
+    if (onShowAllPlaces) {
+      onShowAllPlaces();
+      return;
+    }
+    fitAllPlaces();
   };
 
   const enterPhotoMode = (mediaId: string) => {
@@ -384,6 +398,11 @@ export default function MapContainer({
         const zoom = map.getZoom();
         setMapZoom(zoom);
         map.setFeatures(getMapFeatures(zoom));
+        for (const element of markerElementsRef.current) {
+          if (!element.isConnected) continue;
+          element.style.opacity = '1';
+          element.style.pointerEvents = '';
+        }
       });
       setReady(true);
       // 双击/双指缩放会触发 zoomstart；AMap 可能吞掉 touchend 导致长按定时器残留，
@@ -592,6 +611,30 @@ export default function MapContainer({
       markerElementsRef.current = [];
     };
   }, [categoryLabels, hasPriorityFocus, mapZoom, onSelectPlace, placeMediaSummaries, places, ready, selectedPlace]);
+
+  useEffect(() => {
+    if (!ready || fitAllRequest <= 0) return;
+    let frame = 0;
+    let attempts = 0;
+    let retryTimers: number[] = [];
+    const fitWhenMarkersReady = () => {
+      if (markersRef.current.length > 0) {
+        fitAllPlaces();
+        retryTimers = [250, 700, 1200].map((delay) => window.setTimeout(() => {
+          if (markersRef.current.length > 0) fitAllPlaces();
+        }, delay));
+        return;
+      }
+      if (attempts >= 30) return;
+      attempts += 1;
+      frame = requestAnimationFrame(fitWhenMarkersReady);
+    };
+    frame = requestAnimationFrame(fitWhenMarkersReady);
+    return () => {
+      cancelAnimationFrame(frame);
+      retryTimers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [fitAllRequest, places.length, ready]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1005,7 +1048,7 @@ export default function MapContainer({
       <div className="absolute right-3 top-3 z-30 flex flex-col gap-2 max-sm:hidden">
         <button onClick={() => mapRef.current?.setZoom(Math.min(20, (mapRef.current?.getZoom() ?? 12) + 1))} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="放大"><Plus size={18} /></button>
         <button onClick={() => mapRef.current?.setZoom(Math.max(3, (mapRef.current?.getZoom() ?? 12) - 1))} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="缩小"><Minus size={18} /></button>
-        <button onClick={fitAllPlaces} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="显示全部地点"><LocateFixed size={18} /></button>
+        <button onClick={requestFitAllPlaces} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="显示全部地点" aria-label="显示全部地点"><LocateFixed size={18} /></button>
         <button onClick={() => void locateAndCenter()} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="定位到当前位置"><Crosshair size={18} /></button>
       </div>
 

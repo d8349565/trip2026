@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { calculateDistanceKm } from '../src/utils/distance';
 import { formatMediaDate, groupMediaByDate, sortMediaByDateDesc } from '../src/utils/mediaTimeline';
+import MobileMapPage from '../src/components/mobile/MobileMapPage';
+import { formatPlaceRating, mergeVisitRatings } from '../src/utils/placeRating';
 import { getDefaultTripDateRange, isValidTripDateRange } from '../src/utils/tripDates';
-import type { Media } from '../src/types';
+import type { Media, Place, Visit } from '../src/types';
 
 function media(id: string, capturedAt: string): Media {
   return {
@@ -44,4 +48,61 @@ test('distance is only calculated from supplied coordinates', () => {
   assert.equal(calculateDistanceKm({ latitude: 0, longitude: 0 }, { latitude: 0, longitude: 0 }), 0);
   assert.equal(calculateDistanceKm({ latitude: 0, longitude: 0 }, { latitude: 1, longitude: 0 }), 111.2);
   assert.equal(calculateDistanceKm({ latitude: Number.NaN, longitude: 0 }, { latitude: 1, longitude: 0 }), undefined);
+});
+
+test('visit ratings are merged into place previews as the average score', () => {
+  const place: Place = {
+    id: 'place-1',
+    name: '测试地点',
+    category_id: 'scenic',
+    latitude: 28,
+    longitude: 113,
+    coordinate_system: 'GCJ02',
+    address: '长沙',
+    status: 'visited',
+    visibility: 'private',
+    favorite: false,
+    recommended: false,
+    created_by: 'user-1',
+    created_at: '2026-08-01T00:00:00.000Z',
+    updated_at: '2026-08-01T00:00:00.000Z',
+  };
+  const visits: Pick<Visit, 'place_id' | 'rating'>[] = [
+    { place_id: place.id, rating: 4 },
+    { place_id: place.id, rating: 2 },
+  ];
+
+  assert.equal(mergeVisitRatings([place], visits)[0].rating, 3);
+});
+
+test('place rating display tolerates null database values', () => {
+  assert.equal(formatPlaceRating(null), '未评分');
+  assert.equal(formatPlaceRating(undefined), '未评分');
+  assert.equal(formatPlaceRating(4), '4.0');
+});
+
+test('mobile map exposes an explicit show-all-places action', () => {
+  const props = {
+    places: [],
+    media: [],
+    selectedPlace: null,
+    onSelectPlace: () => {},
+    onViewPlaceDetails: () => {},
+    onCreatePlace: async () => ({}) as Place,
+    onUpdatePlace: async () => ({}) as Place,
+    onDeletePlace: async () => {},
+    onRequestEditor: () => {},
+    editorRequest: 0,
+    editRequest: null,
+    photoDraft: null,
+    onPhotoDraftEnd: () => {},
+    onToggleFavorite: () => {},
+    onAddToTrip: () => {},
+    categoryColors: {},
+    categoryLabels: {},
+    categoryIcons: {},
+  } as unknown as React.ComponentProps<typeof MobileMapPage>;
+
+  const html = renderToStaticMarkup(React.createElement(MobileMapPage, props));
+  assert.match(html, /id="m_btn_show_all_places"/);
 });
