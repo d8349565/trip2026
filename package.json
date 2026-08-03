@@ -15,7 +15,6 @@
     "db:import": "tsx scripts/import-json-to-sqlite.ts"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "argon2": "^0.44.0",

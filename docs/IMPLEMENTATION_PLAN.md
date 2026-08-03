@@ -46,7 +46,6 @@
 - Unsplash 预设图片、1×1 占位图等 Demo 注入逻辑。
 - 固定潮州范围、模拟河流、聚合点和假路线。
 - 未执行成功就显示成功的前端分支。
-- AI Studio 遗留配置以及最终确认未使用的依赖。
 - 当前公开且不安全的备份、恢复、删除和导出入口。
 
 ## 3. 阻塞问题
@@ -86,7 +85,7 @@
 - `package.json`、锁文件：统一 npm，增加跨平台 clean、test 和生产冒烟脚本。
 - `vite.config.ts`：客户端固定输出到 `dist/client`。
 - `server.ts`、`src/server/config.ts`、`src/server/start.ts`：服务端 ESM 输出、环境配置、健康检查、错误边界和优雅退出。
-- `.env.example`、`.gitignore`：删除 AI Studio 配置，明确本地配置与运行数据忽略规则。
+- `.env.example`、`.gitignore`：明确本地配置与运行数据忽略规则。
 - `tests/`、`scripts/`：最小健康测试和生产启动冒烟。
 
 **技术方案**：客户端与服务端分别输出到 `dist/client`、`dist/server/index.mjs`；生产入口显式设置 production 且不加载 Vite；`GET /api/health` 返回环境和存储状态；无效端口在启动前失败。
