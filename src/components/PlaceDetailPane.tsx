@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { IMAGE_PLACEHOLDER, MapLocation, Place, Trip, TripDay, Media, Guide, TripItem, Visit, type MediaUploadInput } from '../types';
 import { photoLocationFields, preparePhotoForUpload } from '../utils/photoUpload';
 import { calculateDistanceKm } from '../utils/distance';
+import { pickPlaceCover } from '../utils/placeCover';
 import { 
   Heart, CheckSquare, Star, MapPin, AlertTriangle, Lightbulb, 
   Layers, ChevronRight, X, Image as ImageIcon, Sparkles, Clock, 
@@ -123,8 +124,8 @@ export default function PlaceDetailPane({
 
   // Find real uploaded or seeded photos linked to this place
   const relatedPhotos = media.filter(m => m.place_id === place.id);
-  // 有效封面：用户设置的 cover_image 优先，否则默认第一张关联照片
-  const effectiveCover = place.cover_image || relatedPhotos[0]?.file_path;
+  // 有效封面：用户设置的 cover_image 优先，否则回退到最新关联照片（与手机端一致）
+  const effectiveCover = pickPlaceCover(place, relatedPhotos);
 
   // Find actual visits linked to this place
   const relatedVisits = visits.filter(v => v.place_id === place.id);
@@ -714,7 +715,7 @@ export default function PlaceDetailPane({
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {relatedPhotos.map(photo => {
-                  const isCover = (place.cover_image ?? relatedPhotos[0]?.file_path) === photo.file_path;
+                  const isCover = effectiveCover !== undefined && effectiveCover === photo.file_path;
                   return (
                     <div key={photo.id} className="relative rounded-xl overflow-hidden aspect-4/3 bg-slate-100 border border-slate-200 shadow-2xs group">
                       <img 

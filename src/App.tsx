@@ -305,8 +305,10 @@ export default function App() {
         api.getVisits(),
       ]);
 
-      const tripDetails = await Promise.all(tripsData.map((trip) => api.getTripDetails(trip.id)));
-      const checklistDetails = await Promise.all(checklistsData.map((checklist) => api.getChecklistDetails(checklist.id)));
+      const [tripDetails, checklistDetails] = await Promise.all([
+        api.getTripDetailsBatch(tripsData.map((trip) => trip.id)),
+        api.getChecklistDetailsBatch(checklistsData.map((checklist) => checklist.id)),
+      ]);
 
       setPlaces(placesData);
       setTrips(tripsData);

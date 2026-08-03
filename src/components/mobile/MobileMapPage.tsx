@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { MapLocation, Media, Place, PlaceCategory } from '../../types';
 import MapContainer from '../MapContainer';
 import MobilePlaceMiniCard from './MobilePlaceMiniCard';
+import { pickPlaceCover } from '../../utils/placeCover';
 import { MapPin, X, Heart, Sparkles, LayoutList, MapPinPlus, Waves, Mountain, UtensilsCrossed, LayoutGrid, Crosshair } from 'lucide-react';
 
 interface MobileMapPageProps {
@@ -184,7 +185,7 @@ export default function MobileMapPage({
       {selectedPlace && (
         <MobilePlaceMiniCard
           place={selectedPlace}
-          coverUrl={selectedPlace.cover_image || media.find(m => m.place_id === selectedPlace.id)?.file_path}
+          coverUrl={pickPlaceCover(selectedPlace, media.filter(m => m.place_id === selectedPlace.id))}
           onClose={() => onSelectPlace(null)}
           onViewDetails={() => onViewPlaceDetails(selectedPlace)}
           onAddToTrip={() => onAddToTrip(selectedPlace.id)}

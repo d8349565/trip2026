@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Place, PlaceCategory, Trip, TripDay, Media, Visit, Guide, type MediaUploadInput } from '../../types';
 import MobileAddPlaceToTripSheet from './MobileAddPlaceToTripSheet';
 import { photoLocationFields, preparePhotoForUpload } from '../../utils/photoUpload';
+import { pickPlaceCover } from '../../utils/placeCover';
 import { 
   Heart, Star, MapPin, X, ImageIcon, Clock, BookOpen, 
   DollarSign, Compass, Calendar, Check, User, Plus, 
@@ -72,8 +73,8 @@ export default function MobilePlaceDetailPage({
   // Filter trips & media
   const filteredDays = tripDays.filter(d => d.trip_id === selectedTripId);
   const placePhotos = media.filter(m => m.place_id === place.id);
-  // 有效封面：用户设置的 cover_image 优先，否则默认第一张关联照片（与 PC 端一致）
-  const effectiveCover = place.cover_image || placePhotos[0]?.file_path;
+  // 有效封面：用户设置的 cover_image 优先，否则回退到最新关联照片（与 PC 端一致）
+  const effectiveCover = pickPlaceCover(place, placePhotos);
   const placeVisits = visits.filter(v => v.place_id === place.id);
 
   useEffect(() => {
