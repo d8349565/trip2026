@@ -10,7 +10,7 @@ import { describeBrowserLocationFailure, getBestBrowserLocation } from '../utils
 import { wgs84ToGcj02 } from '../utils/coords';
 import { confirmedPhotoLocationFields } from '../utils/photoUpload';
 import { clusterPlaces, selectClusterRepresentative, summarizePlaceMedia } from '../utils/mapClusters';
-import { resolveMapFocus, shouldFitAllPlacesInitially } from '../utils/mapViewport';
+import { resolveMapFocus, shouldFitAllPlacesInitially, computeFitView } from '../utils/mapViewport';
 import type { MapLocation, Place, PlaceCategory, Media, MediaUploadInput } from '../types';
 
 /** 一张「本地已处理、尚未落库」的照片，等待用户在地图上确认位置与归属后一并保存。 */
@@ -356,9 +356,17 @@ export default function MapContainer({
     let disposed = false;
     loadAmap().then((AMap) => {
       if (disposed || !containerRef.current) return;
-      const initialZoom = places.length === 0 ? 4 : places.length > 1 ? 11 : 13;
+      // 多点分散时「质心 + 固定缩放」会落在空白区域，改为按包围盒直接算视野。
+      const initFit = computeFitView(
+        places,
+        containerRef.current.clientWidth,
+        containerRef.current.clientHeight,
+      );
+      const initialZoom = places.length === 0
+        ? 4
+        : initFit?.zoom ?? (places.length > 1 ? 11 : 13);
       const map = new AMap.Map(containerRef.current, {
-        center: initialCenterRef.current,
+        center: initFit?.center ?? initialCenterRef.current,
         zoom: initialZoom,
         mapStyle: AMAP_TRAVEL_STYLE,
         features: getMapFeatures(initialZoom),
@@ -583,7 +591,22 @@ export default function MapContainer({
       initialFitDoneRef.current = true;
       // 照片确认或地点编辑已指定明确焦点时，绝不能再用全量标记覆盖视野。
       if (shouldFitAllPlacesInitially(markersRef.current.length, priorityFocus)) {
-        requestAnimationFrame(fitAllPlaces);
+        // setFitView 需要地图完成首帧渲染且容器有尺寸才可靠；
+        // complete 事件为准，再加一次延迟兑底，避免初始视野丢失。
+        const doFit = () => fitAllPlaces();
+        const map = mapRef.current as unknown as {
+          getStatus?: () => { complete?: boolean };
+          once?: (event: string, handler: () => void) => void;
+        };
+        if (map?.getStatus?.().complete) {
+          requestAnimationFrame(doFit);
+          setTimeout(doFit, 600);
+        } else if (map?.once) {
+          map.once('complete', () => requestAnimationFrame(doFit));
+          setTimeout(doFit, 1200);
+        } else {
+          requestAnimationFrame(doFit);
+        }
       }
     }
     return () => {
