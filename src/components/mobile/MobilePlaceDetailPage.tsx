@@ -3,6 +3,7 @@ import { Place, PlaceCategory, Trip, TripDay, Media, Visit, Guide, type MediaUpl
 import MobileAddPlaceToTripSheet from './MobileAddPlaceToTripSheet';
 import { photoLocationFields, preparePhotoForUpload } from '../../utils/photoUpload';
 import { formatPlaceRating } from '../../utils/placeRating';
+import { pickPlaceCover } from '../../utils/placeCover';
 import { 
   Heart, Star, MapPin, X, ImageIcon, Clock, BookOpen, 
   DollarSign, Compass, Calendar, Check, User, Plus, 
@@ -57,6 +58,7 @@ export default function MobilePlaceDetailPage({
   // Photo state
   const [isUploading, setIsUploading] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [lightboxPhoto, setLightboxPhoto] = useState<Media | null>(null);
 
   // Visit logging state
   const [showVisitForm, setShowVisitForm] = useState(false);
@@ -72,8 +74,8 @@ export default function MobilePlaceDetailPage({
   // Filter trips & media
   const filteredDays = tripDays.filter(d => d.trip_id === selectedTripId);
   const placePhotos = media.filter(m => m.place_id === place.id);
-  // 有效封面：用户设置的 cover_image 优先，否则默认第一张关联照片（与 PC 端一致）
-  const effectiveCover = place.cover_image || placePhotos[0]?.file_path;
+  // 有效封面：用户设置的 cover_image 优先，否则回退到最新关联照片（与 PC 端一致）
+  const effectiveCover = pickPlaceCover(place, placePhotos);
   const placeVisits = visits.filter(v => v.place_id === place.id);
 
   useEffect(() => {
@@ -336,7 +338,11 @@ export default function MobilePlaceDetailPage({
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {placePhotos.map(photo => (
-                  <div key={photo.id} className="relative rounded-xl overflow-hidden aspect-square bg-slate-100 shadow-xs group">
+                  <div
+                    key={photo.id}
+                    className="relative rounded-xl overflow-hidden aspect-square bg-slate-100 shadow-xs group"
+                    onClick={() => setLightboxPhoto(photo)}
+                  >
                     <img 
                       src={photo.file_path} 
                       alt="Place photo" 
@@ -521,6 +527,36 @@ export default function MobilePlaceDetailPage({
           <span>+ 安排加入自驾日程计划</span>
         </button>
       </div>
+
+      {/* Photo Lightbox */}
+      {lightboxPhoto && (
+        <div
+          className="fixed inset-0 bg-slate-950 z-[60] flex flex-col animate-fade-in select-none"
+          onClick={() => setLightboxPhoto(null)}
+        >
+          <div className="px-4 py-4 flex items-center justify-between shrink-0">
+            <span className="text-[10px] font-bold text-white/50">
+              {lightboxPhoto.captured_at ? lightboxPhoto.captured_at.substring(0, 10) : '近期上传'}
+            </span>
+            <button
+              id="m_place_photo_lightbox_close"
+              onClick={() => setLightboxPhoto(null)}
+              className="w-10 h-10 rounded-full bg-slate-900/40 backdrop-blur-md text-white flex items-center justify-center active:scale-90 transition-all outline-none"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
+            <img
+              src={lightboxPhoto.file_path}
+              alt="放大查看"
+              className="max-h-full max-w-full object-contain rounded-lg shadow-2xl"
+              referrerPolicy="no-referrer"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Add To Itinerary Picker Panel Overlay */}
       <MobileAddPlaceToTripSheet

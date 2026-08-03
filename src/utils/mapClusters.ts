@@ -1,4 +1,5 @@
 import type { Media, Place } from '../types';
+import { pickLatestPhoto } from './placeCover';
 
 export interface PlaceCluster {
   key: string;
@@ -35,9 +36,7 @@ export function summarizePlaceMedia(
 
   return new Map(places.map((place) => {
     const photos = mediaByPlace.get(place.id) ?? [];
-    const latestPhoto = photos.reduce<Media | undefined>((latest, item) => (
-      !latest || item.created_at > latest.created_at ? item : latest
-    ), undefined);
+    const latestPhoto = pickLatestPhoto(photos);
     return [place.id, {
       photoCount: photos.length,
       coverUrl: place.cover_image || latestPhoto?.thumbnail_path || latestPhoto?.file_path || undefined,

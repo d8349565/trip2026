@@ -248,7 +248,7 @@ test('health, authentication, session rotation, and API guards work', async (con
     body: JSON.stringify({
       filename: 'browser-location.jpg',
       file_size: 10,
-      dataUrl: `data:image/jpeg;base64,${Buffer.from('test-photo').toString('base64')}`,
+      dataUrl: `data:image/jpeg;base64,${Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01]).toString('base64')}`,
       latitude: 30.2741,
       longitude: 120.1551,
       coordinate_system: 'WGS84',

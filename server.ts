@@ -11,7 +11,7 @@ import crypto from 'crypto';
 import https from 'https';
 import { fileURLToPath } from 'url';
 import type { Server } from 'node:http';
-import { DbEngine, hashPassword } from './src/dbEngine';
+import { DbEngine } from './src/dbEngine';
 import { AppDatabase, Place, Trip, TripDay, TripItem, Guide, Checklist, ChecklistItem, Media } from './src/types';
 import { config } from './src/server/config';
 import { wgs84ToGcj02 } from './src/utils/coords';
@@ -37,6 +37,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 
 export const app = express();
+app.set("trust proxy", 1);
 
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
 app.use(express.json({ limit: '10mb' }));
@@ -46,7 +47,29 @@ const UPLOADS_DIR = config.uploadsPath;
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
-app.use('/uploads', express.static(UPLOADS_DIR));
+
+const mediaFileUrl = (id: string) => `/api/media/${id}/file`;
+const mediaThumbnailUrl = (id: string) => `/api/media/${id}/thumbnail`;
+
+function serializeMedia(m: Media): Media {
+  return { ...m, file_path: mediaFileUrl(m.id), thumbnail_path: mediaThumbnailUrl(m.id) };
+}
+
+function serializeCoverImage(db: AppDatabase, cover?: string): string | undefined {
+  if (!cover) return undefined;
+  if (cover.startsWith('/api/media/')) return cover;
+  const match = db.media.find((m) => m.file_path === cover || m.thumbnail_path === cover);
+  return match ? mediaFileUrl(match.id) : undefined;
+}
+
+function serializePlace(db: AppDatabase, place: Place): Place {
+  return { ...place, cover_image: serializeCoverImage(db, place.cover_image) };
+}
+// Private media must go through the authorized /api/media/:id/file endpoints.
+// Legacy /uploads/* URLs are no longer served.
+app.use('/uploads', (_req, res) => {
+  res.status(404).json({ error: { code: 'NOT_FOUND', message: 'API endpoint not found' } });
+});
 
 const dbEngine = DbEngine.getInstance();
 const geocodingService = new GeocodingService(
@@ -132,6 +155,10 @@ app.get('/api/map/markers', (req, res) => {
     ))
     .map((place) => {
       const placeMedia = mediaByPlace.get(place.id) ?? [];
+      const latestMedia = placeMedia.reduce<Media | undefined>(
+        (latest, item) => (!latest || item.created_at > latest.created_at ? item : latest),
+        undefined,
+      );
       return {
         id: place.id,
         name: place.name,
@@ -140,7 +167,8 @@ app.get('/api/map/markers', (req, res) => {
         category_id: place.category_id,
         status: place.status,
         favorite: place.favorite,
-        cover_image: place.cover_image || placeMedia[0]?.thumbnail_path,
+        cover_image: serializeCoverImage(db, place.cover_image)
+          ?? (latestMedia ? mediaThumbnailUrl(latestMedia.id) : undefined),
         photo_count: placeMedia.length,
       };
     });
@@ -443,55 +471,6 @@ const GUIDE_UPDATE_FIELDS = [
 
 // ---------------- USER & AUTH API ----------------
 
-app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-  const db = dbEngine.getRawDb();
-  const user = db.users.find(u => u.username === username);
-  if (!user) {
-    return res.status(401).json({ error: '用户不存在' });
-  }
-  const hashed = hashPassword(password);
-  if (db.passwords[user.id] !== hashed) {
-    return res.status(401).json({ error: '密码错误' });
-  }
-  res.json({ user });
-});
-
-app.post('/api/auth/register-by-invite', (req, res) => {
-  const { username, password, inviteCode } = req.body;
-  const db = dbEngine.getRawDb();
-  
-  // Find valid invite code
-  const inviteIndex = db.invites.findIndex(i => i.code === inviteCode);
-  if (inviteIndex === -1) {
-    return res.status(400).json({ error: '无效的邀请码' });
-  }
-  const invite = db.invites[inviteIndex];
-  if (invite.uses >= invite.max_uses || new Date(invite.expires_at) < new Date()) {
-    return res.status(400).json({ error: '邀请码已过期或达到使用次数限制' });
-  }
-
-  // Check username exists
-  if (db.users.some(u => u.username === username)) {
-    return res.status(400).json({ error: '用户名已存在' });
-  }
-
-  const newUser = {
-    id: 'u_' + Math.random().toString(36).substring(2, 9),
-    username,
-    role: 'user' as const,
-    is_active: true,
-    created_at: new Date().toISOString(),
-  };
-
-  db.users.push(newUser);
-  db.passwords[newUser.id] = hashPassword(password);
-  db.invites[inviteIndex].uses += 1;
-
-  dbEngine.saveDb(db);
-  res.json({ user: newUser });
-});
-
 app.get('/api/me', (req, res) => {
   const userId = getCurrentUserId(req);
   const db = dbEngine.getRawDb();
@@ -595,7 +574,8 @@ app.get('/api/places', (req, res) => {
     );
   }
 
-  res.json(result);
+  const db = dbEngine.getRawDb();
+  res.json(result.map((place) => serializePlace(db, place)));
 });
 
 app.post('/api/places', (req, res) => {
@@ -650,14 +630,14 @@ app.post('/api/places', (req, res) => {
 
   db.places.push(newPlace);
   dbEngine.saveDb(db);
-  res.json(newPlace);
+  res.json(serializePlace(db, newPlace));
 });
 
 app.get('/api/places/:id', (req, res) => {
   const place = dbEngine.getPlacesForUser(getCurrentUserId(req)).find(p => p.id === req.params.id);
   if (place && !canRead(req, place)) return forbidden(res);
   if (!place) return res.status(404).json({ error: '地点不存在' });
-  res.json(place);
+  res.json(serializePlace(dbEngine.getRawDb(), place));
 });
 
 app.patch('/api/places/:id', (req, res) => {
@@ -674,7 +654,7 @@ app.patch('/api/places/:id', (req, res) => {
 
   db.places[index] = updatedPlace;
   dbEngine.saveDb(db);
-  res.json(updatedPlace);
+  res.json(serializePlace(db, updatedPlace));
 });
 
 app.delete('/api/places/:id', (req, res) => {
@@ -697,7 +677,7 @@ app.post('/api/places/:id/favorite', (req, res) => {
   const place = dbEngine.getPlacesForUser(userId).find((item) => item.id === req.params.id);
   if (!place) return res.status(404).json({ error: { code: 'PLACE_NOT_FOUND', message: 'Place not found' } });
   if (!canRead(req, place)) return forbidden(res);
-  res.json(dbEngine.togglePlaceFavorite(userId, place.id));
+  res.json(serializePlace(dbEngine.getRawDb(), dbEngine.togglePlaceFavorite(userId, place.id)));
 });
 
 app.post('/api/places/:id/mark-visited', (req, res) => {
@@ -705,7 +685,7 @@ app.post('/api/places/:id/mark-visited', (req, res) => {
   const place = dbEngine.getPlacesForUser(userId).find((item) => item.id === req.params.id);
   if (!place) return res.status(404).json({ error: { code: 'PLACE_NOT_FOUND', message: 'Place not found' } });
   if (!canRead(req, place)) return forbidden(res);
-  res.json(dbEngine.togglePlaceVisited(userId, place.id));
+  res.json(serializePlace(dbEngine.getRawDb(), dbEngine.togglePlaceVisited(userId, place.id)));
 });
 
 // ---------------- VISITS API ----------------
@@ -761,9 +741,18 @@ app.post('/api/visits', (req, res) => {
   db.visits.push(newVisit);
   // Keep owner status in the snapshot aligned before replaceSnapshot, so a full
   // rewrite cannot clobber the visit-driven "visited" state for the owner.
-  if (targetPlace.created_by === userId) {
-    db.places[placeIndex] = { ...targetPlace, status: 'visited' };
-  }
+  // Also aggregate visit ratings into the place rating (average of all visits).
+  const placeVisitRatings = db.visits
+    .filter((v) => v.place_id === targetPlace.id && Number.isFinite(Number(v.rating)) && Number(v.rating) > 0)
+    .map((v) => Number(v.rating));
+  const aggregatedRating = placeVisitRatings.length > 0
+    ? Math.round((placeVisitRatings.reduce((sum, r) => sum + r, 0) / placeVisitRatings.length) * 10) / 10
+    : undefined;
+  db.places[placeIndex] = {
+    ...targetPlace,
+    status: targetPlace.created_by === userId ? 'visited' : targetPlace.status,
+    rating: aggregatedRating ?? targetPlace.rating,
+  };
 
   dbEngine.saveDb(db);
   // Always write the current user's per-user state (covers non-owner visitors too).
@@ -852,6 +841,28 @@ app.get('/api/trips/:id', (req, res) => {
   });
 });
 
+app.post('/api/trips/details-batch', (req, res) => {
+  const ids = (req.body as { ids?: unknown } | undefined)?.ids;
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'ids must be an array of strings' } });
+  }
+  if (ids.length > 100) {
+    return res.status(400).json({ error: { code: 'TOO_MANY_IDS', message: 'ids must contain at most 100 entries' } });
+  }
+
+  const db = dbEngine.getRawDb();
+  const details = [];
+  for (const id of ids) {
+    const trip = db.trips.find(t => t.id === id);
+    if (!trip || !canRead(req, trip)) continue;
+    const days = db.tripDays.filter(d => d.trip_id === trip.id);
+    const dayIds = days.map(d => d.id);
+    const items = db.tripItems.filter(item => dayIds.includes(item.trip_day_id));
+    details.push({ ...trip, days, items });
+  }
+  res.json({ details });
+});
+
 app.patch('/api/trips/:id', (req, res) => {
   const db = dbEngine.getRawDb();
   const index = db.trips.findIndex(t => t.id === req.params.id);
@@ -919,6 +930,7 @@ app.post('/api/trip-days/:id/items', (req, res) => {
   if (!trip) return res.status(404).json({ error: { code: 'TRIP_DAY_NOT_FOUND', message: 'Trip day not found' } });
   if (!canModify(req, trip)) return forbidden(res);
   const itemData = req.body;
+  if (!validateReference(req, res, db.places, itemData.place_id, '目标地点')) return;
 
   // Find max sort order
   const dayItems = db.tripItems.filter(item => item.trip_day_id === dayId);
@@ -1102,8 +1114,105 @@ app.get('/api/media', (req, res) => {
     result = result.filter(m => m.trip_id === trip_id);
   }
 
-  res.json(result);
+  res.json(result.map(serializeMedia));
 });
+
+const MEDIA_FILE_CONTENT_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.avif': 'image/avif',
+  '.heic': 'image/heic',
+};
+
+type ImageMime = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'image/avif' | 'image/heic';
+
+const UPLOAD_MIME_WHITELIST = new Set<ImageMime>([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/heic',
+]);
+
+const MIME_TO_EXTENSION: Record<ImageMime, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'image/avif': '.avif',
+  'image/heic': '.heic',
+};
+
+// Identify the real image type from magic bytes — the declared MIME is never trusted.
+function sniffImageMime(buffer: Buffer): ImageMime | null {
+  if (buffer.length >= 3 && buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return 'image/jpeg';
+  if (
+    buffer.length >= 8
+    && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47
+    && buffer[4] === 0x0D && buffer[5] === 0x0A && buffer[6] === 0x1A && buffer[7] === 0x0A
+  ) return 'image/png';
+  if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  if (buffer.length >= 6 && (buffer.toString('ascii', 0, 6) === 'GIF87a' || buffer.toString('ascii', 0, 6) === 'GIF89a')) return 'image/gif';
+  if (buffer.length >= 12 && buffer.toString('ascii', 4, 8) === 'ftyp') {
+    const brand = buffer.toString('ascii', 8, 12);
+    if (brand === 'avif' || brand === 'avis') return 'image/avif';
+    if (['heic', 'heix', 'hevc', 'mif1', 'msf1'].includes(brand)) return 'image/heic';
+  }
+  return null;
+}
+
+type ReferableResource = ProtectedResource & { id: string };
+
+// Cross-resource references may only target resources the user can read;
+// optional references (null/undefined/empty string) pass through untouched.
+function validateReference(
+  req: express.Request,
+  res: express.Response,
+  items: ReferableResource[],
+  id: unknown,
+  label: string,
+): boolean {
+  if (id === undefined || id === null || id === '') return true;
+  const target = typeof id === 'string' ? items.find((item) => item.id === id) : undefined;
+  if (!target || !canRead(req, target)) {
+    res.status(400).json({ error: { code: 'INVALID_REFERENCE', message: `${label}不存在或无权访问` } });
+    return false;
+  }
+  return true;
+}
+
+function serveMediaFile(req: express.Request, res: express.Response, kind: 'file' | 'thumbnail') {
+  const db = dbEngine.getRawDb();
+  const media = db.media.find((m) => m.id === req.params.id);
+  // Media the user cannot read is treated as non-existent, matching the
+  // filtering behaviour of the media list endpoint.
+  if (!media || !canRead(req, media)) {
+    return res.status(404).json({ error: { code: 'MEDIA_NOT_FOUND', message: '照片不存在' } });
+  }
+
+  const storedPath = kind === 'thumbnail' ? media.thumbnail_path : media.file_path;
+  if (!storedPath || !storedPath.startsWith('/uploads/')) {
+    return res.status(400).json({ error: { code: 'INVALID_MEDIA_PATH', message: 'Invalid media path' } });
+  }
+  const uploadsRoot = path.resolve(UPLOADS_DIR);
+  const fullPath = path.resolve(uploadsRoot, storedPath.slice('/uploads/'.length));
+  if (!fullPath.startsWith(uploadsRoot + path.sep)) {
+    return res.status(400).json({ error: { code: 'INVALID_MEDIA_PATH', message: 'Invalid media path' } });
+  }
+  const contentType = MEDIA_FILE_CONTENT_TYPES[path.extname(fullPath).toLowerCase()];
+  if (!contentType) {
+    return res.status(400).json({ error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Unsupported media type' } });
+  }
+  if (!fs.existsSync(fullPath)) {
+    return res.status(404).json({ error: { code: 'MEDIA_FILE_NOT_FOUND', message: '照片文件不存在' } });
+  }
+
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(fullPath).pipe(res);
+}
+
+app.get('/api/media/:id/file', (req, res) => serveMediaFile(req, res, 'file'));
+app.get('/api/media/:id/thumbnail', (req, res) => serveMediaFile(req, res, 'thumbnail'));
 
 // Since files are saved inside server, we can simulate an upload
 // by saving base64 string or handling mock uploads for our light private use.
@@ -1130,18 +1239,36 @@ app.post('/api/media/upload', (req, res) => {
     });
   }
 
-  // Target directory
-  const safeFilename = path.basename(String(filename || 'photo.jpg')).replace(/[^\p{L}\p{N}._-]+/gu, '_');
-  const relativePath = path.join('places', `${Date.now()}_${safeFilename || 'photo.jpg'}`);
-  const targetPath = path.join(UPLOADS_DIR, relativePath);
+  // Attachments may only reference resources the user can read.
+  if (!validateReference(req, res, db.places, place_id, '目标地点')) return;
+  if (!validateReference(req, res, db.trips, trip_id, '目标行程')) return;
 
-  // Parse dataUrl
+  // Parse dataUrl and verify the payload really is a whitelisted image;
+  // the declared MIME alone is never trusted (SVG/HTML would otherwise be stored).
   const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
   if (!matches || matches.length !== 3) {
     return res.status(400).json({ error: '无效的数据格式' });
   }
 
+  const declaredMime = matches[1].toLowerCase();
   const buffer = Buffer.from(matches[2], 'base64');
+  const sniffedMime = sniffImageMime(buffer);
+  if (!sniffedMime || !UPLOAD_MIME_WHITELIST.has(sniffedMime) || sniffedMime !== declaredMime) {
+    return res.status(400).json({
+      error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: '仅支持 JPEG/PNG/WebP/GIF/AVIF/HEIC 图片，且文件内容须与声明类型一致' },
+    });
+  }
+
+  // Target directory
+  const safeFilename = path.basename(String(filename || 'photo.jpg')).replace(/[^\p{L}\p{N}._-]+/gu, '_');
+  const extension = path.extname(safeFilename).toLowerCase();
+  if (extension && !MEDIA_FILE_CONTENT_TYPES[extension]) {
+    return res.status(400).json({
+      error: { code: 'UNSUPPORTED_FILE_EXTENSION', message: '文件扩展名不支持，仅允许 JPG/PNG/WebP/GIF/AVIF/HEIC' },
+    });
+  }
+  const relativePath = path.join('places', `${Date.now()}_${safeFilename || 'photo.jpg'}${extension ? '' : MIME_TO_EXTENSION[sniffedMime]}`);
+  const targetPath = path.join(UPLOADS_DIR, relativePath);
   const dir = path.dirname(targetPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -1196,7 +1323,7 @@ app.post('/api/media/upload', (req, res) => {
     }
     throw error;
   }
-  res.json(newMedia);
+  res.json(serializeMedia(newMedia));
 });
 
 app.patch('/api/media/:id', (req, res) => {
@@ -1205,13 +1332,18 @@ app.patch('/api/media/:id', (req, res) => {
   if (index !== -1 && !canModify(req, db.media[index])) return forbidden(res);
   if (index === -1) return res.status(404).json({ error: '照片不存在' });
 
+  const updates = pickAllowed(req.body, MEDIA_UPDATE_FIELDS);
+  if (!validateReference(req, res, db.places, updates.place_id, '目标地点')) return;
+  if (!validateReference(req, res, db.trips, updates.trip_id, '目标行程')) return;
+  if (!validateReference(req, res, db.visits, updates.visit_id, '目标打卡记录')) return;
+
   db.media[index] = {
     ...db.media[index],
-    ...pickAllowed(req.body, MEDIA_UPDATE_FIELDS)
+    ...updates
   };
 
   dbEngine.saveDb(db);
-  res.json(db.media[index]);
+  res.json(serializeMedia(db.media[index]));
 });
 
 app.delete('/api/media/:id', (req, res) => {
@@ -1255,10 +1387,31 @@ app.get('/api/checklists/:id', (req, res) => {
   });
 });
 
+app.post('/api/checklists/details-batch', (req, res) => {
+  const ids = (req.body as { ids?: unknown } | undefined)?.ids;
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'ids must be an array of strings' } });
+  }
+  if (ids.length > 100) {
+    return res.status(400).json({ error: { code: 'TOO_MANY_IDS', message: 'ids must contain at most 100 entries' } });
+  }
+
+  const db = dbEngine.getRawDb();
+  const details = [];
+  for (const id of ids) {
+    const checklist = db.checklists.find(cl => cl.id === id);
+    if (!checklist || !canRead(req, checklist)) continue;
+    const items = db.checklistItems.filter(item => item.checklist_id === checklist.id);
+    details.push({ ...checklist, items });
+  }
+  res.json({ details });
+});
+
 app.post('/api/checklists', (req, res) => {
   const userId = getCurrentUserId(req);
   const db = dbEngine.getRawDb();
   const { title, trip_id, template_type } = req.body;
+  if (!validateReference(req, res, db.trips, trip_id, '目标行程')) return;
 
   const checklistId = 'cl_' + Math.random().toString(36).substring(2, 9);
   const newChecklist: Checklist = {
@@ -1280,6 +1433,7 @@ app.post('/api/checklists/from-template', (req, res) => {
   const userId = getCurrentUserId(req);
   const db = dbEngine.getRawDb();
   const { title, trip_id, template_type } = req.body;
+  if (!validateReference(req, res, db.trips, trip_id, '目标行程')) return;
 
   const checklistId = 'cl_' + Math.random().toString(36).substring(2, 9);
   const newChecklist: Checklist = {

@@ -263,6 +263,16 @@ export const api = {
     return res.json();
   },
 
+  getTripDetailsBatch: async (ids: string[]): Promise<Array<Trip & { days: any[]; items: any[] }>> => {
+    if (ids.length === 0) return [];
+    const result = await request<{ details: Array<Trip & { days: any[]; items: any[] }> }>('/api/trips/details-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    return result.details;
+  },
+
   updateTrip: async (id: string, data: Partial<Trip>): Promise<Trip> => {
     const res = await fetch(`${API_BASE}/api/trips/${id}`, {
       method: 'PATCH',
@@ -386,6 +396,16 @@ export const api = {
   getChecklistDetails: async (id: string): Promise<Checklist & { items: any[] }> => {
     const res = await fetch(`${API_BASE}/api/checklists/${id}`);
     return res.json();
+  },
+
+  getChecklistDetailsBatch: async (ids: string[]): Promise<Array<Checklist & { items: any[] }>> => {
+    if (ids.length === 0) return [];
+    const result = await request<{ details: Array<Checklist & { items: any[] }> }>('/api/checklists/details-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    return result.details;
   },
 
   createChecklist: async (data: { title: string; trip_id?: string; template_type?: string }, userId?: string): Promise<Checklist> => {
