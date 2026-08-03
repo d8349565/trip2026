@@ -37,6 +37,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 
 export const app = express();
+app.set("trust proxy", 1);
 
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
 app.use(express.json({ limit: '10mb' }));
