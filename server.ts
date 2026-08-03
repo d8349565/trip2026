@@ -761,9 +761,18 @@ app.post('/api/visits', (req, res) => {
   db.visits.push(newVisit);
   // Keep owner status in the snapshot aligned before replaceSnapshot, so a full
   // rewrite cannot clobber the visit-driven "visited" state for the owner.
-  if (targetPlace.created_by === userId) {
-    db.places[placeIndex] = { ...targetPlace, status: 'visited' };
-  }
+  // Also aggregate visit ratings into the place rating (average of all visits).
+  const placeVisitRatings = db.visits
+    .filter((v) => v.place_id === targetPlace.id && Number.isFinite(Number(v.rating)) && Number(v.rating) > 0)
+    .map((v) => Number(v.rating));
+  const aggregatedRating = placeVisitRatings.length > 0
+    ? Math.round((placeVisitRatings.reduce((sum, r) => sum + r, 0) / placeVisitRatings.length) * 10) / 10
+    : undefined;
+  db.places[placeIndex] = {
+    ...targetPlace,
+    status: targetPlace.created_by === userId ? 'visited' : targetPlace.status,
+    rating: aggregatedRating ?? targetPlace.rating,
+  };
 
   dbEngine.saveDb(db);
   // Always write the current user's per-user state (covers non-owner visitors too).
