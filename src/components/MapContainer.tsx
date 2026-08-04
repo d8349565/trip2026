@@ -92,7 +92,8 @@ type AMapGlobal = {
   Marker: new (options: Record<string, unknown>) => AMapMarker;
 };
 
-const AMAP_TRAVEL_STYLE = 'amap://styles/whitesmoke';
+// 标准底图保留河流、溪流等水系的清晰对比，便于溯溪地点选点和浏览。
+export const AMAP_TRAVEL_STYLE = 'amap://styles/normal';
 const AMAP_DETAIL_ZOOM = 12;
 const AMAP_OVERVIEW_FEATURES: AMapFeature[] = ['bg', 'road', 'building'];
 const AMAP_DETAIL_FEATURES: AMapFeature[] = [...AMAP_OVERVIEW_FEATURES, 'point'];
