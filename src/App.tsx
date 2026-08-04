@@ -718,7 +718,7 @@ export default function App() {
     const todayItems = activeDay ? tripItems.filter(item => item.trip_day_id === activeDay.id).sort((a, b) => a.sort_order - b.sort_order) : [];
 
     return (
-      <div className="h-screen w-screen flex flex-col bg-slate-50/50 overflow-hidden text-slate-800 relative font-sans select-none" style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))' }} aria-busy={isLoadingData}>
+      <div className="h-screen w-screen flex flex-col bg-slate-50/50 overflow-hidden text-slate-800 relative font-sans select-none" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(4rem + env(safe-area-inset-bottom))' }} aria-busy={isLoadingData}>
         {feedback && (
           <div className="fixed left-1/2 top-3 z-[70] w-[min(420px,calc(100%-2rem))] -translate-x-1/2">
             <FeedbackBanner message={feedback.message} tone={feedback.tone} onDismiss={() => setFeedback(null)} />

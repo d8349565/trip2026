@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { MapLocation, Media, Place, PlaceCategory } from '../../types';
 import MapContainer from '../MapContainer';
 import MobilePlaceMiniCard from './MobilePlaceMiniCard';
+import MobileFullscreenToggle from './MobileFullscreenToggle';
 import { pickPlaceCover } from '../../utils/placeCover';
 import { MapPin, X, Heart, Sparkles, LayoutList, MapPinPlus, Waves, Mountain, UtensilsCrossed, LayoutGrid, Crosshair, LocateFixed } from 'lucide-react';
 
@@ -204,6 +205,9 @@ export default function MobileMapPage({
           <span>当前位置</span>
         </button>
       )}
+
+      {/* 4.1 浏览器内全屏开关（固定在「当前位置」下方，全屏后仍可点击退出） */}
+      <MobileFullscreenToggle />
 
       {/* 5. Miniature Place Card (when place is selected) */}
       {selectedPlace && (
