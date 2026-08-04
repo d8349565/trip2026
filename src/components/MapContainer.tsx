@@ -496,11 +496,18 @@ export default function MapContainer({
     const revealMarker = (element: HTMLElement) => {
       element.style.opacity = '0';
       markerElementsRef.current.push(element);
-      requestAnimationFrame(() => {
-        if (!element.isConnected) return;
-        element.style.opacity = '1';
-        element.style.pointerEvents = '';
-      });
+      // AMap 2.0 自定义 content 的 DOM 挂载是异步的，首帧 rAF 时往往还未 isConnected；
+      // 若此时直接放弃，标记会永久透明，首页表现为「视野正确但一片空白」。
+      // 改为重试到挂载完成再淡入。
+      const reveal = (attempt: number) => {
+        if (element.isConnected) {
+          element.style.opacity = '1';
+          element.style.pointerEvents = '';
+          return;
+        }
+        if (attempt < 20) requestAnimationFrame(() => reveal(attempt + 1));
+      };
+      requestAnimationFrame(() => reveal(0));
     };
 
     markersRef.current = clusterPlaces(places, mapZoom).map((cluster) => {
