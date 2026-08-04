@@ -6,7 +6,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronRight, ChevronsUp, Crosshair, Edit3, Heart, Link2, LocateFixed, MapPin, Minus, Plus, Search, Trash2, X } from 'lucide-react';
 import { api, type AmapPoi } from '../api';
-import { describeBrowserLocationFailure, getBestBrowserLocation } from '../utils/browserLocation';
+import {
+  describeBrowserLocationFailure,
+  getBestBrowserLocation,
+  type BrowserLocationFix,
+} from '../utils/browserLocation';
 import { wgs84ToGcj02 } from '../utils/coords';
 import { confirmedPhotoLocationFields } from '../utils/photoUpload';
 import { clusterPlaces, selectClusterRepresentative, summarizePlaceMedia } from '../utils/mapClusters';
@@ -808,16 +812,29 @@ export default function MapContainer({
   // 只接受浏览器设备定位。失败时保持当前视野，不使用网络出口 IP 猜测位置。
   const locateAndCenter = async () => {
     setMessage('正在获取高精度位置…');
-    const result = await getBestBrowserLocation();
-    if (result.ok) {
-      const { latitude, longitude } = wgs84ToGcj02(result.fix.latitude, result.fix.longitude);
+
+    const applyBrowserFix = (fix: BrowserLocationFix, persist: boolean) => {
+      const { latitude, longitude } = wgs84ToGcj02(fix.latitude, fix.longitude);
       applyMyLocation({
         latitude,
         longitude,
-        accuracyM: result.fix.accuracyM,
+        accuracyM: fix.accuracyM,
         source: 'browser',
-        observedAt: result.fix.observedAt,
-      }, 16);
+        observedAt: fix.observedAt,
+      }, 16, persist);
+      return { latitude, longitude };
+    };
+
+    const result = await getBestBrowserLocation({
+      onProgress: (fix) => {
+        applyBrowserFix(fix, false);
+        setMessage(fix.accuracyM <= 30
+          ? `已获取约 ±${Math.round(fix.accuracyM)} 米的位置，正在确认精度…`
+          : `已获取约 ±${Math.round(fix.accuracyM)} 米的粗略位置，正在提高精度…`);
+      },
+    });
+    if (result.ok) {
+      const { latitude, longitude } = applyBrowserFix(result.fix, true);
       void refreshMyLocationAddress(latitude, longitude);
       setMessage(`定位完成，当前精度约 ±${Math.round(result.fix.accuracyM)} 米；可拖动蓝点微调。`);
       return;

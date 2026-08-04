@@ -31,6 +31,10 @@ interface BrowserLocationOptions {
   timeoutMs?: number;
   targetAccuracyM?: number;
   maxAcceptedAccuracyM?: number;
+  /** 达到目标精度后继续收集更优样本的短暂窗口。 */
+  targetSettleMs?: number;
+  /** 每当出现更好的可用位置时立即通知调用方，用于先展示、后精修。 */
+  onProgress?: (fix: BrowserLocationFix) => void;
   secureContext?: boolean;
   geolocation?: GeolocationLike;
 }
@@ -67,12 +71,15 @@ function errorReason(error: GeolocationPositionError): BrowserLocationFailureRea
  *
  * - 仅在安全上下文运行，避免局域网 HTTP 下静默降级。
  * - 不接受缓存位置。
- * - 达到目标精度时提前结束；超时时只接受不差于最大阈值的结果。
+ * - 可用位置通过 onProgress 立即展示，不阻塞用户等待最终精度。
+ * - 达到目标精度后短暂收敛，避免立即采用首个偶发漂移样本。
+ * - 超时时只接受不差于最大阈值的结果。
  */
 export function getBestBrowserLocation(options: BrowserLocationOptions = {}): Promise<BrowserLocationResult> {
-  const timeoutMs = options.timeoutMs ?? 15_000;
+  const timeoutMs = options.timeoutMs ?? 10_000;
   const targetAccuracyM = options.targetAccuracyM ?? 30;
   const maxAcceptedAccuracyM = options.maxAcceptedAccuracyM ?? 100;
+  const targetSettleMs = options.targetSettleMs ?? 750;
   const secureContext = options.secureContext
     ?? (typeof window !== 'undefined' ? window.isSecureContext : false);
   const geolocation = options.geolocation
@@ -84,11 +91,13 @@ export function getBestBrowserLocation(options: BrowserLocationOptions = {}): Pr
   return new Promise((resolve) => {
     let watchId: number | undefined;
     let bestFix: BrowserLocationFix | undefined;
+    let targetTimer: ReturnType<typeof setTimeout> | undefined;
     let settled = false;
 
     const cleanup = () => {
       if (watchId !== undefined) geolocation.clearWatch(watchId);
       clearTimeout(timer);
+      if (targetTimer !== undefined) clearTimeout(targetTimer);
     };
     const finish = (result: BrowserLocationResult) => {
       if (settled) return;
@@ -110,8 +119,17 @@ export function getBestBrowserLocation(options: BrowserLocationOptions = {}): Pr
         (position) => {
           if (!isValidPosition(position)) return;
           const fix = toFix(position);
-          if (!bestFix || fix.accuracyM < bestFix.accuracyM) bestFix = fix;
-          if (fix.accuracyM <= targetAccuracyM) finish({ ok: true, fix });
+          if (!bestFix || fix.accuracyM < bestFix.accuracyM) {
+            bestFix = fix;
+            if (fix.accuracyM <= maxAcceptedAccuracyM) {
+              options.onProgress?.(fix);
+            }
+          }
+          if (fix.accuracyM <= targetAccuracyM && targetTimer === undefined) {
+            targetTimer = setTimeout(() => {
+              if (bestFix) finish({ ok: true, fix: bestFix });
+            }, Math.min(targetSettleMs, timeoutMs));
+          }
         },
         (error) => finishWithBestOr(errorReason(error)),
         {

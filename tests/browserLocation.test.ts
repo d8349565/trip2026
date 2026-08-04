@@ -64,6 +64,7 @@ test('连续采样会选择达到目标精度的位置并停止监听', async ()
     secureContext: true,
     geolocation,
     timeoutMs: 100,
+    targetSettleMs: 5,
   });
   assert.equal(result.ok, true);
   assert.equal((result as Extract<BrowserLocationResult, { ok: true }>).fix.accuracyM, 18);
@@ -72,9 +73,10 @@ test('连续采样会选择达到目标精度的位置并停止监听', async ()
 
 test('先报告可用的粗略位置，再采用短暂采样内更准确的结果', async () => {
   const progressAccuracy: number[] = [];
+  let sendBetterFix: (() => void) | undefined;
   const geolocation = fakeGeolocation((success) => {
     success(position(30, 120, 80));
-    setTimeout(() => success(position(30.1, 120.1, 18)), 2);
+    sendBetterFix = () => success(position(30.1, 120.1, 18));
   });
 
   const pending = getBestBrowserLocation({
@@ -87,6 +89,8 @@ test('先报告可用的粗略位置，再采用短暂采样内更准确的结�
 
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(progressAccuracy, [80]);
+  assert.ok(sendBetterFix);
+  sendBetterFix();
 
   const result = await pending;
   assert.equal(result.ok, true);
