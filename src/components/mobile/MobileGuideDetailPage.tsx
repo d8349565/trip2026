@@ -232,10 +232,10 @@ export default function MobileGuideDetailPage({
       {showMoreMenu && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end animate-fade-in">
           <div className="absolute inset-0" onClick={() => setShowMoreMenu(false)}></div>
-          <div className="relative w-full bg-white rounded-t-3xl shadow-2xl z-10 p-5 space-y-3 animate-slide-up">
+          <div className="relative z-10 w-full space-y-3 rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl animate-slide-up">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <h5 className="font-extrabold text-slate-800 text-xs">更多攻略工具</h5>
-              <button aria-label="关闭攻略更多操作" onClick={() => setShowMoreMenu(false)} className="p-1 rounded-full bg-slate-100 text-slate-500 outline-none"><X size={15} /></button>
+              <button aria-label="关闭攻略更多操作" onClick={() => setShowMoreMenu(false)} className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 outline-none"><X size={15} /></button>
             </div>
 
             <div className="space-y-1">

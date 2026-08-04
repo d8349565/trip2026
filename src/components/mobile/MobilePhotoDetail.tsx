@@ -59,7 +59,7 @@ export default function MobilePhotoDetail({
           <button
             id="m_photo_detail_del"
             onClick={handleDeleteClick}
-            className="w-10 h-10 rounded-full bg-slate-900/40 backdrop-blur-md flex items-center justify-center text-slate-300 hover:text-red-500 outline-none"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/40 text-slate-300 outline-none backdrop-blur-md hover:text-red-500"
           >
             <Trash2 size={18} />
           </button>

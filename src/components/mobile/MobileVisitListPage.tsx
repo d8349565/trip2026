@@ -65,7 +65,7 @@ export default function MobileVisitListPage({
   }).sort((a, b) => b.visit_date.localeCompare(a.visit_date));
 
   return (
-    <div className="fixed inset-0 bg-slate-50 z-40 flex flex-col font-sans select-none pb-16">
+    <div className="fixed inset-0 z-40 flex flex-col bg-slate-50 pb-[calc(4rem+env(safe-area-inset-bottom))] font-sans select-none">
       {/* Header */}
       <header className="bg-white px-4 py-4.5 border-b border-slate-100 flex items-center justify-between shadow-xs shrink-0 z-10">
         <div className="flex items-center gap-3">
@@ -111,7 +111,7 @@ export default function MobileVisitListPage({
               placeholder="搜索到访地点或记录心得内容..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-500 focus:bg-white font-sans"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-base outline-none focus:border-blue-500 focus:bg-white font-sans"
             />
           </div>
         )}
@@ -120,7 +120,7 @@ export default function MobileVisitListPage({
           <select
             value={selectedTripFilter}
             onChange={(e) => setSelectedTripFilter(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none font-sans"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-base font-bold outline-none font-sans"
           >
             <option value="">选择关联行程规划过滤...</option>
             {trips.map(t => (
@@ -133,7 +133,7 @@ export default function MobileVisitListPage({
           <select
             value={selectedPlaceFilter}
             onChange={(e) => setSelectedPlaceFilter(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none font-sans"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-base font-bold outline-none font-sans"
           >
             <option value="">选择特定地点过滤...</option>
             {places.map(p => (

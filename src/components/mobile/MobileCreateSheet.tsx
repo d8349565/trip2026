@@ -1,10 +1,10 @@
 import React from 'react';
-import { X, MapPin, Calendar, Image, BookOpen, CheckSquare, Compass } from 'lucide-react';
+import { X, MapPin, Image, Compass } from 'lucide-react';
 
 interface MobileCreateSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  onAction: (action: 'add_place' | 'create_trip' | 'upload_photo' | 'create_guide' | 'create_checklist' | 'log_visit') => void;
+  onAction: (action: 'add_place' | 'upload_photo' | 'log_visit') => void;
 }
 
 export default function MobileCreateSheet({ isOpen, onClose, onAction }: MobileCreateSheetProps) {
@@ -20,36 +20,12 @@ export default function MobileCreateSheet({ isOpen, onClose, onAction }: MobileC
       bgColor: 'bg-emerald-50',
     },
     {
-      id: 'm_act_trip',
-      type: 'create_trip' as const,
-      label: '创建行程',
-      desc: '规划一次全新的旅行路线',
-      icon: <Calendar className="text-blue-500" size={20} />,
-      bgColor: 'bg-blue-50',
-    },
-    {
       id: 'm_act_photo',
       type: 'upload_photo' as const,
       label: '上传照片',
       desc: '上传并关联旅行精彩瞬间',
       icon: <Image className="text-purple-500" size={20} />,
       bgColor: 'bg-purple-50',
-    },
-    {
-      id: 'm_act_guide',
-      type: 'create_guide' as const,
-      label: '新建攻略',
-      desc: '撰写戏水避暑与避坑经验',
-      icon: <BookOpen className="text-amber-500" size={20} />,
-      bgColor: 'bg-amber-50',
-    },
-    {
-      id: 'm_act_checklist',
-      type: 'create_checklist' as const,
-      label: '新建清单',
-      desc: '备足徒步/溯溪装备与物资',
-      icon: <CheckSquare className="text-cyan-500" size={20} />,
-      bgColor: 'bg-cyan-50',
     },
     {
       id: 'm_act_visit',
@@ -71,14 +47,14 @@ export default function MobileCreateSheet({ isOpen, onClose, onAction }: MobileC
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h3 id="m-create-sheet-title" className="font-extrabold text-slate-800 text-base">快捷新建与记录</h3>
-            <p className="text-xs text-slate-400 mt-0.5">选择您想要在旅途中进行的操作</p>
+            <h3 id="m-create-sheet-title" className="font-extrabold text-slate-800 text-base">创建与记录</h3>
+            <p className="text-xs text-slate-400 mt-0.5">只保留会立即开始的新建操作</p>
           </div>
           <button 
             id="m_close_create_sheet"
-            aria-label="关闭快捷新建与记录"
+            aria-label="关闭创建与记录"
             onClick={onClose}
-            className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 active:scale-95 transition-all outline-none"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 outline-none transition-all hover:bg-slate-200 active:scale-95"
           >
             <X size={18} />
           </button>

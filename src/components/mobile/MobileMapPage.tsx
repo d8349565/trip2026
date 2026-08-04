@@ -4,7 +4,7 @@ import MapContainer from '../MapContainer';
 import MobilePlaceMiniCard from './MobilePlaceMiniCard';
 import MobileFullscreenToggle from './MobileFullscreenToggle';
 import { pickPlaceCover } from '../../utils/placeCover';
-import { MapPin, X, Heart, Sparkles, LayoutList, MapPinPlus, Crosshair, LocateFixed, SlidersHorizontal, Ellipsis } from 'lucide-react';
+import { MapPin, X, Heart, Sparkles, LayoutList, Crosshair, LocateFixed, SlidersHorizontal, Ellipsis, UserRound } from 'lucide-react';
 
 interface MobileMapPageProps {
   places: Place[];
@@ -22,6 +22,8 @@ interface MobileMapPageProps {
   onPhotoDraftEnd: () => void;
   onToggleFavorite: (id: string) => void;
   onAddToTrip: (placeId: string) => void;
+  onOpenProfile: () => void;
+  profileLabel: string;
   onLocationChange?: (location: MapLocation) => void;
   categoryColors: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }>;
   categoryLabels: Record<PlaceCategory, string>;
@@ -44,6 +46,8 @@ export default function MobileMapPage({
   onPhotoDraftEnd,
   onToggleFavorite,
   onAddToTrip,
+  onOpenProfile,
+  profileLabel,
   onLocationChange,
   categoryColors,
   categoryLabels,
@@ -129,22 +133,23 @@ export default function MobileMapPage({
           categoryColors={categoryColors}
           categoryLabels={categoryLabels}
           categoryIcons={categoryIcons}
-          searchSlot={
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none" onClick={(e) => e.stopPropagation()}>
+          searchActions={
+            <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
               <button
                 id="m_btn_open_filter"
                 type="button"
                 aria-haspopup="dialog"
                 aria-expanded={showFilterSheet}
                 onClick={() => setShowFilterSheet(true)}
-                className={`px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border outline-none shrink-0 flex items-center gap-1.5 shadow-sm active:scale-[0.96] transition-all duration-200 ${
+                aria-label="打开地图筛选"
+                title="筛选地点"
+                className={`flex h-9 w-9 items-center justify-center rounded-xl border outline-none shadow-sm active:scale-[0.96] transition-all duration-200 ${
                   hasActiveFilters
                     ? 'border-blue-500 bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-blue-500/25'
                     : 'border-white/50 bg-white/80 text-slate-600 backdrop-blur-sm hover:bg-white'
                 }`}
               >
                 <SlidersHorizontal size={14} />
-                <span>筛选</span>
                 {hasActiveFilters && <span aria-label="已启用筛选" className="h-1.5 w-1.5 rounded-full bg-white" />}
               </button>
 
@@ -154,24 +159,35 @@ export default function MobileMapPage({
                 aria-haspopup="dialog"
                 aria-expanded={showActionSheet}
                 onClick={() => setShowActionSheet(true)}
-                className="px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border border-white/50 bg-white/80 text-slate-600 backdrop-blur-sm outline-none shrink-0 flex items-center gap-1.5 shadow-sm hover:bg-white active:scale-[0.96] transition-all duration-200"
+                aria-label="打开地图操作"
+                title="地图操作"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/50 bg-white/80 text-slate-600 backdrop-blur-sm outline-none shadow-sm hover:bg-white active:scale-[0.96] transition-all duration-200"
               >
                 <Ellipsis size={15} />
-                <span>操作</span>
               </button>
             </div>
           }
         />
       </div>
 
-      {/* 4. Current location is an independent primary map control. */}
+      <button
+        id="m_btn_open_profile"
+        type="button"
+        onClick={onOpenProfile}
+        aria-label="打开我的"
+        className="absolute right-3 top-16 z-30 flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-100 bg-white/95 text-sm font-black text-blue-600 shadow-lg backdrop-blur-md outline-none transition-transform active:scale-95"
+      >
+        {profileLabel ? <span aria-hidden="true">{profileLabel.slice(0, 1).toUpperCase()}</span> : <UserRound size={18} />}
+      </button>
+
+      {/* 4. Current location lives in the lower thumb zone. */}
       {!showListView && (
         <button
           id="m_btn_locate"
           type="button"
           onClick={() => setLocateRequest(Date.now())}
           aria-label="定位到当前位置"
-          className="absolute right-3 top-28 z-30 flex min-h-11 items-center gap-2 rounded-2xl border border-blue-100 bg-white/95 px-3.5 text-xs font-bold text-blue-600 shadow-lg backdrop-blur-md outline-none transition-colors duration-200 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-400 active:bg-blue-100"
+          className="absolute bottom-28 right-3 z-30 flex min-h-11 items-center gap-2 rounded-2xl border border-blue-100 bg-white/95 px-3.5 text-xs font-bold text-blue-600 shadow-lg backdrop-blur-md outline-none transition-colors duration-200 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-400 active:bg-blue-100"
         >
           <Crosshair size={17} />
           <span>当前位置</span>
@@ -199,7 +215,7 @@ export default function MobileMapPage({
       {showFilterSheet && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end animate-fade-in">
           <div className="absolute inset-0" onClick={() => setShowFilterSheet(false)}></div>
-          <div className="relative w-full bg-white rounded-t-3xl shadow-2xl z-10 p-5 space-y-4 max-h-[80vh] overflow-y-auto animate-slide-up">
+          <div className="relative z-10 max-h-[80vh] w-full space-y-4 overflow-y-auto rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl animate-slide-up">
             
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -207,9 +223,11 @@ export default function MobileMapPage({
                 <h4 className="font-extrabold text-slate-800 text-base">高级检索与分类筛选</h4>
                 <p className="text-xs text-slate-400 mt-0.5">选择分类类别或旅行到访状态过滤</p>
               </div>
-              <button 
+              <button
+                type="button"
+                aria-label="关闭地图筛选"
                 onClick={() => setShowFilterSheet(false)}
-                className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 outline-none"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 outline-none hover:bg-slate-200"
               >
                 <X size={16} />
               </button>
@@ -318,13 +336,13 @@ export default function MobileMapPage({
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-base font-extrabold text-slate-800">地图操作</h4>
-                <p className="mt-0.5 text-xs text-slate-400">将视野、列表和录入集中在这里</p>
+                <p className="mt-0.5 text-xs text-slate-400">将视野与列表集中在这里</p>
               </div>
-              <button type="button" aria-label="关闭地图操作" onClick={() => setShowActionSheet(false)} className="rounded-full bg-slate-100 p-2 text-slate-500 outline-none active:scale-90">
+              <button type="button" aria-label="关闭地图操作" onClick={() => setShowActionSheet(false)} className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 outline-none active:scale-90">
                 <X size={16} />
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button id="m_action_show_all" type="button" onClick={() => { setShowActionSheet(false); showAllPlaces(); }} className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-2 text-xs font-bold text-slate-700 active:scale-[0.97]">
                 <LocateFixed size={19} className="text-blue-600" />
                 <span>显示全图</span>
@@ -332,10 +350,6 @@ export default function MobileMapPage({
               <button id="m_action_show_list" type="button" onClick={() => { setShowActionSheet(false); setShowListView(true); }} className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-2 text-xs font-bold text-slate-700 active:scale-[0.97]">
                 <LayoutList size={19} className="text-violet-600" />
                 <span>地点列表</span>
-              </button>
-              <button id="m_action_add_place" type="button" onClick={() => { setShowActionSheet(false); onRequestEditor(); }} className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl bg-gradient-to-b from-blue-500 to-blue-600 px-2 text-xs font-bold text-white shadow-md shadow-blue-500/25 active:scale-[0.97]">
-                <MapPinPlus size={19} />
-                <span>添加地点</span>
               </button>
             </div>
           </div>
@@ -346,7 +360,7 @@ export default function MobileMapPage({
       {showListView && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center animate-fade-in">
           <div className="absolute inset-0" onClick={() => setShowListView(false)}></div>
-          <div className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl z-10 flex flex-col max-h-[85vh] overflow-hidden">
+          <div className="relative z-10 flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl sm:max-w-md sm:rounded-2xl">
             
             {/* Header */}
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -354,16 +368,18 @@ export default function MobileMapPage({
                 <h4 className="font-extrabold text-slate-800 text-base">采集打卡点检索清单</h4>
                 <p className="text-xs text-slate-400 mt-0.5">当前筛选出 {filteredPlaces.length} 个足迹标记点</p>
               </div>
-              <button 
+              <button
+                type="button"
+                aria-label="关闭地点列表"
                 onClick={() => setShowListView(false)}
-                className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 outline-none"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 outline-none hover:bg-slate-200"
               >
                 <X size={16} />
               </button>
             </div>
 
             {/* Scrollable list of places */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2.5 pb-8">
+            <div className="flex-1 space-y-2.5 overflow-y-auto p-4 pb-8">
               {filteredPlaces.length === 0 ? (
                 <div className="text-center py-12">
                   <MapPin size={36} className="text-slate-300 mx-auto" />

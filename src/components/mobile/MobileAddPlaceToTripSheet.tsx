@@ -107,7 +107,7 @@ export default function MobileAddPlaceToTripSheet({
           <button
             onClick={onClose}
             aria-label="关闭加入行程"
-            className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 active:scale-95 transition-all outline-none"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 outline-none transition-all hover:bg-slate-200 active:scale-95"
           >
             <X size={18} />
           </button>
@@ -170,7 +170,7 @@ export default function MobileAddPlaceToTripSheet({
                   value={selectedTripId}
                   onChange={(e) => setSelectedTripId(e.target.value)}
                   required
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-500 focus:bg-white font-sans"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base font-semibold outline-none focus:border-blue-500 focus:bg-white font-sans"
                 >
                   {trips.map(t => (
                     <option key={t.id} value={t.id}>{t.title} ({t.start_date})</option>
@@ -191,7 +191,7 @@ export default function MobileAddPlaceToTripSheet({
                   value={selectedDayId}
                   onChange={(e) => setSelectedDayId(e.target.value)}
                   required
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-500 focus:bg-white font-sans"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base font-semibold outline-none focus:border-blue-500 focus:bg-white font-sans"
                 >
                   {activeTripDays.map(d => (
                     <option key={d.id} value={d.id}>Day {d.day_number} - {d.title} ({d.date})</option>
@@ -209,7 +209,7 @@ export default function MobileAddPlaceToTripSheet({
                   <select
                     value={itemType}
                     onChange={(e) => setItemType(e.target.value as TripItemType)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-500 focus:bg-white font-sans"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base font-semibold outline-none focus:border-blue-500 focus:bg-white font-sans"
                   >
                     <option value="play">景点游玩 🎪</option>
                     <option value="food">饕餮美食 🍲</option>
@@ -229,7 +229,7 @@ export default function MobileAddPlaceToTripSheet({
                     placeholder="例如 09:30"
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-500 focus:bg-white font-sans text-center font-mono"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base font-semibold outline-none focus:border-blue-500 focus:bg-white font-sans text-center font-mono"
                   />
                 </div>
               </div>
@@ -242,7 +242,7 @@ export default function MobileAddPlaceToTripSheet({
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={2}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-500 focus:bg-white resize-none font-sans"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base font-semibold outline-none focus:border-blue-500 focus:bg-white resize-none font-sans"
                 />
               </div>
 

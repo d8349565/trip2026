@@ -42,7 +42,7 @@ export default function MobilePlaceMiniCard({
         <button 
           id="m_minicard_close"
           onClick={onClose}
-          className="p-1 bg-slate-100/80 text-slate-400 rounded-full hover:text-slate-600 outline-none"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100/80 text-slate-400 outline-none hover:text-slate-600"
         >
           <X size={14} />
         </button>

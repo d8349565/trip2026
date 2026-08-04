@@ -99,9 +99,10 @@ export default function App() {
   const [mobileSelectedPhoto, setMobileSelectedPhoto] = useState<Media | null>(null);
   const [mobileSelectedGuide, setMobileSelectedGuide] = useState<Guide | null>(null);
   const [mobileSelectedPlaceDetail, setMobileSelectedPlaceDetail] = useState<Place | null>(null);
-  const [mobileTripTab, setMobileTripTab] = useState<'today' | 'manage'>('today');
+  const [mobileTripTab, setMobileTripTab] = useState<'today' | 'manage' | 'guides'>('today');
   const [showMobileCreateSheet, setShowMobileCreateSheet] = useState(false);
   const [mobileCreateTripRequest, setMobileCreateTripRequest] = useState(0);
+  const [mobilePhotoUploadRequest, setMobilePhotoUploadRequest] = useState(0);
 
   // Mobile active trip and active day selectors states with persistence
   const [activeTripId, setActiveTripId] = useState<string | null>(() => {
@@ -236,6 +237,11 @@ export default function App() {
   };
 
   const handleNavigateToView = (view: 'map' | 'trip' | 'photos' | 'checklist' | 'guide' | 'settings', id?: string) => {
+    if (isMobile && view === 'guide') {
+      setViewMode('trip');
+      setMobileTripTab('guides');
+      return;
+    }
     setViewMode(view);
     if (view === 'photos' && id) {
       setActivePhotoPlaceId(id);
@@ -802,6 +808,8 @@ export default function App() {
                     setMobileAddPlaceToTripTarget(p);
                   }
                 }}
+                onOpenProfile={() => setViewMode('settings')}
+                profileLabel={currentUser?.username ?? ''}
                 categoryColors={CATEGORY_COLORS}
                 categoryLabels={CATEGORY_LABELS}
                 categoryIcons={CATEGORY_ICONS}
@@ -831,6 +839,15 @@ export default function App() {
                 >
                   行程规划
                 </button>
+                <button
+                  id="m_trip_tab_guides"
+                  onClick={() => setMobileTripTab('guides')}
+                  className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${
+                    mobileTripTab === 'guides' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
+                  }`}
+                >
+                  攻略
+                </button>
               </div>
 
               {mobileTripTab === 'today' ? (
@@ -852,7 +869,7 @@ export default function App() {
                   onOpenDaySelector={() => setShowDaySelector(true)}
                   allDays={activeDays}
                 />
-              ) : (
+              ) : mobileTripTab === 'manage' ? (
                 <MobileTripOverviewPage
                   trips={trips}
                   allDays={tripDays}
@@ -867,6 +884,13 @@ export default function App() {
                   onAddTripItem={handleAddTripItem}
                   onDeleteTripItem={handleDeleteTripItem}
                 />
+              ) : (
+                <MobileGuideListPage
+                  guides={guides}
+                  places={places}
+                  onSelectGuide={(guide) => setMobileSelectedGuide(guide)}
+                  onCreateGuide={handleCreateGuide}
+                />
               )}
             </div>
           )}
@@ -875,6 +899,7 @@ export default function App() {
             <MobilePhotoTimeline
               media={media}
               places={places}
+              uploadRequest={mobilePhotoUploadRequest}
               onUploadPhoto={handleUploadMedia}
               onDeletePhoto={handleDeleteMedia}
               onToggleFavorite={handleToggleFavoriteMedia}
@@ -925,13 +950,9 @@ export default function App() {
         {/* 3. Mobile Bottom Navigation Bar (Fixed bottom) */}
         <div className="fixed bottom-0 inset-x-0 z-40">
           <MobileBottomNav
-            currentView={viewMode === 'settings' ? 'profile' : viewMode}
+            currentView={viewMode === 'settings' ? 'map' : viewMode}
             onViewChange={(tab) => {
-              if (tab === 'profile') {
-                setViewMode('settings');
-              } else {
-                setViewMode(tab);
-              }
+              setViewMode(tab);
               setSelectedPlace(null);
             }}
             onOpenCreate={() => setShowMobileCreateSheet(true)}
@@ -994,6 +1015,7 @@ export default function App() {
             onAddPlaceToTrip={(placeId) => {
               const p = places.find(item => item.id === placeId);
               if (p) {
+                setMobileSelectedGuide(null);
                 setMobileAddPlaceToTripTarget(p);
               }
             }}
@@ -1013,14 +1035,9 @@ export default function App() {
                 requestMapEditor();
               } else if (action === 'log_visit') {
                 setShowQuickVisit(true);
-              } else if (action === 'create_trip') {
-                openMobileCreateTrip();
               } else if (action === 'upload_photo') {
                 setViewMode('photos');
-              } else if (action === 'create_checklist') {
-                setViewMode('checklist');
-              } else if (action === 'create_guide') {
-                setViewMode('guide');
+                setMobilePhotoUploadRequest((request) => request + 1);
               }
             }}
           />

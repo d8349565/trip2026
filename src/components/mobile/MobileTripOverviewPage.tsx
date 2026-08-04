@@ -407,7 +407,7 @@ export default function MobileTripOverviewPage({
                                   onDeleteTripItem(item.id);
                                 }
                               }}
-                              className="p-2 text-slate-400 hover:text-red-500 rounded-full hover:bg-red-50 transition-colors shrink-0 outline-none"
+                              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 outline-none transition-colors hover:bg-red-50 hover:text-red-500"
                             >
                               <Trash2 size={14} />
                             </button>
@@ -446,10 +446,10 @@ export default function MobileTripOverviewPage({
           {showCreateTripModal && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end animate-fade-in">
               <div className="absolute inset-0" onClick={() => setShowCreateTripModal(false)}></div>
-              <div className="relative w-full bg-white rounded-t-3xl shadow-2xl z-10 p-5 space-y-4 max-h-[80vh] overflow-y-auto animate-slide-up">
+              <div className="relative z-10 max-h-[80vh] w-full space-y-4 overflow-y-auto rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl animate-slide-up">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                   <h4 className="font-extrabold text-slate-800 text-sm">🎒 新建长途自驾探险行程</h4>
-                  <button aria-label="关闭创建行程" onClick={() => setShowCreateTripModal(false)} className="p-1 rounded-full bg-slate-100 text-slate-500 outline-none">
+                  <button aria-label="关闭创建行程" onClick={() => setShowCreateTripModal(false)} className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 outline-none">
                     <X size={16} />
                   </button>
                 </div>
@@ -584,7 +584,7 @@ export default function MobileTripOverviewPage({
                             onDeleteTrip(trip.id);
                           }
                         }}
-                        className="p-1 text-slate-400 hover:text-red-500 rounded-full hover:bg-red-50 outline-none"
+                        className="flex h-11 w-11 items-center justify-center rounded-full text-slate-400 outline-none hover:bg-red-50 hover:text-red-500"
                       >
                         <Trash2 size={13} />
                       </button>

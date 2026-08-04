@@ -71,7 +71,7 @@ export default function MobileGuideListPage({
             placeholder="搜索溯溪攻略、自驾避坑提示..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="flex-1 text-slate-800 placeholder-slate-400 bg-transparent text-xs font-medium border-none outline-none"
+            className="flex-1 border-none bg-transparent text-base font-medium text-slate-800 outline-none placeholder-slate-400"
           />
         </div>
 
@@ -97,7 +97,7 @@ export default function MobileGuideListPage({
         <form onSubmit={handleCreateSubmit} className="bg-white rounded-2xl p-4.5 border border-blue-100 space-y-3.5 text-xs animate-in slide-in-from-top-3">
           <div className="flex justify-between items-center border-b border-slate-50 pb-1">
             <h4 className="font-extrabold text-slate-800">📝 新撰写自驾与戏水经验</h4>
-            <button type="button" aria-label="关闭攻略编辑" onClick={() => setShowAddForm(false)} className="text-slate-400"><X size={16} /></button>
+            <button type="button" aria-label="关闭攻略编辑" onClick={() => setShowAddForm(false)} className="flex h-11 w-11 items-center justify-center rounded-full text-slate-400 active:scale-95"><X size={16} /></button>
           </div>
 
           <div>

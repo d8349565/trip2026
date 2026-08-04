@@ -4,6 +4,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { calculateDistanceKm } from '../src/utils/distance';
 import { formatMediaDate, groupMediaByDate, sortMediaByDateDesc } from '../src/utils/mediaTimeline';
+import MobileBottomNav from '../src/components/mobile/MobileBottomNav';
+import MobileCreateSheet from '../src/components/mobile/MobileCreateSheet';
 import MobileMapPage from '../src/components/mobile/MobileMapPage';
 import { formatPlaceRating, mergeVisitRatings } from '../src/utils/placeRating';
 import { getDefaultTripDateRange, isValidTripDateRange } from '../src/utils/tripDates';
@@ -81,7 +83,7 @@ test('place rating display tolerates null database values', () => {
   assert.equal(formatPlaceRating(4), '4.0');
 });
 
-test('mobile map collapses secondary map controls into filter and actions entry points', () => {
+test('mobile map puts filter and map actions inside the search toolbar', () => {
   const props = {
     places: [],
     media: [],
@@ -106,6 +108,38 @@ test('mobile map collapses secondary map controls into filter and actions entry 
   const html = renderToStaticMarkup(React.createElement(MobileMapPage, props));
   assert.match(html, /id="m_btn_open_filter"/);
   assert.match(html, /id="m_btn_open_actions"/);
+  assert.match(html, /aria-label="打开地图筛选"/);
+  assert.match(html, /aria-label="打开地图操作"/);
   assert.doesNotMatch(html, /id="m_cat_all"/);
   assert.doesNotMatch(html, /id="m_btn_show_all_places"/);
+});
+
+test('mobile bottom navigation keeps checklist reachable and moves profile out of the tab bar', () => {
+  const html = renderToStaticMarkup(React.createElement(MobileBottomNav, {
+    currentView: 'map',
+    onViewChange: () => {},
+    onOpenCreate: () => {},
+  }));
+
+  assert.match(html, /id="m_nav_map"/);
+  assert.match(html, /id="m_nav_trip"/);
+  assert.match(html, /id="m_nav_plus"/);
+  assert.match(html, /id="m_nav_checklist"/);
+  assert.match(html, /id="m_nav_photos"/);
+  assert.doesNotMatch(html, /id="m_nav_profile"/);
+});
+
+test('mobile create sheet only exposes actions that start an immediate creation flow', () => {
+  const html = renderToStaticMarkup(React.createElement(MobileCreateSheet, {
+    isOpen: true,
+    onClose: () => {},
+    onAction: () => {},
+  }));
+
+  assert.match(html, /id="m_act_place"/);
+  assert.match(html, /id="m_act_photo"/);
+  assert.match(html, /id="m_act_visit"/);
+  assert.doesNotMatch(html, /id="m_act_trip"/);
+  assert.doesNotMatch(html, /id="m_act_checklist"/);
+  assert.doesNotMatch(html, /id="m_act_guide"/);
 });

@@ -185,7 +185,7 @@ export default function MobileChecklistPage({
         <form onSubmit={handleCreateItemSubmit} className="bg-white rounded-2xl p-4.5 border border-blue-100 space-y-3.5 text-xs animate-in slide-in-from-top-3">
           <div className="flex justify-between items-center border-b border-slate-50 pb-1">
             <h5 className="font-extrabold text-slate-800">📋 新增个人专属行囊节点</h5>
-            <button type="button" aria-label="关闭新增清单项" onClick={() => setShowAddForm(false)} className="text-slate-400"><X size={15} /></button>
+            <button type="button" aria-label="关闭新增清单项" onClick={() => setShowAddForm(false)} className="flex h-11 w-11 items-center justify-center rounded-full text-slate-400 active:scale-95"><X size={15} /></button>
           </div>
 
           <div>

@@ -541,7 +541,7 @@ export default function MobilePlaceDetailPage({
             <button
               id="m_place_photo_lightbox_close"
               onClick={() => setLightboxPhoto(null)}
-              className="w-10 h-10 rounded-full bg-slate-900/40 backdrop-blur-md text-white flex items-center justify-center active:scale-90 transition-all outline-none"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/40 text-white outline-none backdrop-blur-md transition-all active:scale-90"
             >
               <X size={20} />
             </button>

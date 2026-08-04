@@ -37,7 +37,7 @@ export default function MobileDaySelectorSheet({
           </div>
           <button
             onClick={onClose}
-            className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 active:scale-95 transition-all outline-none"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 outline-none transition-all hover:bg-slate-200 active:scale-95"
           >
             <X size={18} />
           </button>

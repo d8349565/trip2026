@@ -109,7 +109,7 @@ export default function MobileQuickVisitSheet({
           <button
             onClick={onClose}
             aria-label="关闭快速记录到访"
-            className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 active:scale-95 transition-all outline-none"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 outline-none transition-all hover:bg-slate-200 active:scale-95"
           >
             <X size={18} />
           </button>
@@ -147,7 +147,7 @@ export default function MobileQuickVisitSheet({
                   placeholder="搜索现有地点或选择下方推荐..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[14px] outline-none focus:border-blue-500 focus:bg-white transition-all font-sans"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base outline-none focus:border-blue-500 focus:bg-white transition-all font-sans"
                 />
                 
                 {/* Search Results Suggestions */}
@@ -185,7 +185,7 @@ export default function MobileQuickVisitSheet({
               value={visitDate}
               onChange={(e) => setVisitDate(e.target.value)}
               required
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[14px] outline-none focus:border-blue-500 focus:bg-white font-sans"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base outline-none focus:border-blue-500 focus:bg-white font-sans"
             />
           </div>
 
@@ -199,7 +199,7 @@ export default function MobileQuickVisitSheet({
               <select
                 value={selectedTripId}
                 onChange={(e) => setSelectedTripId(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[14px] outline-none focus:border-blue-500 focus:bg-white font-sans"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base outline-none focus:border-blue-500 focus:bg-white font-sans"
               >
                 <option value="">不关联具体行程</option>
                 {trips.map(t => (
@@ -217,7 +217,7 @@ export default function MobileQuickVisitSheet({
                 value={selectedDayId}
                 onChange={(e) => setSelectedDayId(e.target.value)}
                 disabled={!selectedTripId}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[14px] outline-none focus:border-blue-500 focus:bg-white disabled:opacity-50 font-sans"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base outline-none focus:border-blue-500 focus:bg-white disabled:opacity-50 font-sans"
               >
                 <option value="">不关联具体天数</option>
                 {availableDays.map(d => (
@@ -239,7 +239,7 @@ export default function MobileQuickVisitSheet({
                 placeholder="晴朗/下雨/微风 32℃"
                 value={weather}
                 onChange={(e) => setWeather(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[14px] outline-none focus:border-blue-500 focus:bg-white font-sans"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base outline-none focus:border-blue-500 focus:bg-white font-sans"
               />
             </div>
 
@@ -253,7 +253,7 @@ export default function MobileQuickVisitSheet({
                 placeholder="例如：独自/朋友/家人"
                 value={companions}
                 onChange={(e) => setCompanions(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[14px] outline-none focus:border-blue-500 focus:bg-white font-sans"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base outline-none focus:border-blue-500 focus:bg-white font-sans"
               />
             </div>
           </div>
@@ -271,7 +271,9 @@ export default function MobileQuickVisitSheet({
                     key={star}
                     type="button"
                     onClick={() => setRating(star)}
-                    className="p-0.5 outline-none"
+                    aria-label={`评分 ${star} 星`}
+                    aria-pressed={star === rating}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl outline-none active:scale-95"
                   >
                     <Star
                       size={20}
@@ -293,7 +295,7 @@ export default function MobileQuickVisitSheet({
                 placeholder="0"
                 value={actualCost}
                 onChange={(e) => setActualCost(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[14px] outline-none focus:border-blue-500 focus:bg-white font-sans"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base outline-none focus:border-blue-500 focus:bg-white font-sans"
               />
             </div>
           </div>
@@ -333,7 +335,7 @@ export default function MobileQuickVisitSheet({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={3}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[14px] outline-none focus:border-blue-500 focus:bg-white resize-none font-sans"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base outline-none focus:border-blue-500 focus:bg-white resize-none font-sans"
             />
           </div>
 

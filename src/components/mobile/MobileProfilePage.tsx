@@ -296,7 +296,7 @@ export default function MobileProfilePage({
                         placeholder="例如: CHAOZHOU2026"
                         value={inviteCodeInput}
                         onChange={(e) => setInviteCodeInput(e.target.value)}
-                        className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-700 placeholder-slate-300"
+                        className="flex-1 rounded-xl border border-slate-200 bg-white p-2.5 text-base font-bold text-slate-700 outline-none placeholder-slate-300 focus:ring-1 focus:ring-blue-500"
                       />
                       <button
                         type="submit"

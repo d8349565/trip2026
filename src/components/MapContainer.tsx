@@ -63,6 +63,8 @@ interface MapContainerProps {
   categoryIcons: Record<PlaceCategory, React.ReactNode>;
   /** 搜索栏下方的插槽（如分类条），确保搜索结果在其后展开不被遮挡 */
   searchSlot?: React.ReactNode;
+  /** 搜索框内右侧的附加控件，移动端用于收纳地图筛选与更多操作。 */
+  searchActions?: React.ReactNode;
 }
 
 type AMapLngLat = { getLng: () => number; getLat: () => number };
@@ -197,6 +199,7 @@ export default function MapContainer({
   onShowAllPlaces,
   categoryLabels,
   searchSlot,
+  searchActions,
 }: MapContainerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -319,7 +322,7 @@ export default function MapContainer({
     if (!editorRequest) return;
     setManualCreateMode(true);
     searchInputRef.current?.focus();
-    setMessage('搜索地点，或双击地图开始手动标记。');
+    setMessage(`搜索地点，或${isTouchDevice ? '长按' : '双击'}地图开始手动标记。`);
   }, [editorRequest]);
 
   useEffect(() => {
@@ -342,7 +345,7 @@ export default function MapContainer({
       startDraftAt(latitude as number, longitude as number, { name: name ?? '', address: address ?? '' });
       setMessage('已根据照片拍摄位置预填。可拖动蓝色标记微调，保存后照片会自动关联到这个地点。');
     } else {
-      setMessage('这张照片没有位置信息。请在地图上双击选择拍摄位置，保存标记后会自动关联照片。');
+      setMessage(`这张照片没有位置信息。请在地图上${isTouchDevice ? '长按' : '双击'}选择拍摄位置，保存标记后会自动关联照片。`);
     }
   }, [photoDraft?.token]);
 
@@ -1069,11 +1072,12 @@ export default function MapContainer({
             <button disabled={busy} className="rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm shadow-blue-500/25 disabled:opacity-50 active:scale-[0.97] transition-all">搜索</button>
           </form> : <form onSubmit={resolveShare} className="flex min-w-0 flex-1 items-center gap-1">
             <Link2 size={15} className="ml-2.5 shrink-0 text-slate-300" />
-            <input value={shareUrl} onChange={(event) => setShareUrl(event.target.value)} placeholder="粘贴高德或百度地图分享链接…" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-slate-300" />
+            <input value={shareUrl} onChange={(event) => setShareUrl(event.target.value)} placeholder="粘贴高德或百度地图分享链接…" className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-slate-300 sm:text-[13px]" />
             <button disabled={busy} className="rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm shadow-blue-500/25 disabled:opacity-50 active:scale-[0.97] transition-all">解析</button>
           </form>}
           <button type="button" aria-label={searchMode === 'poi' ? '粘贴地图分享链接' : '搜索高德地点'} onClick={() => { setSearchMode((current) => current === 'poi' ? 'share' : 'poi'); setPois([]); }} className="ml-0.5 rounded-xl p-2 text-slate-400 hover:bg-slate-100/80 hover:text-slate-600 active:scale-95 transition-all" title={searchMode === 'poi' ? '粘贴地图分享链接' : '搜索高德地点'}>{searchMode === 'poi' ? <Link2 size={15} /> : <Search size={15} />}</button>
-          <button type="button" aria-label="手动地图选点" onClick={() => { setManualCreateMode(true); setMessage('请在地图目标位置双击，随后可拖动蓝色标记微调。'); searchInputRef.current?.blur(); }} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100/80 hover:text-slate-600 active:scale-95 transition-all" title="手动地图选点"><MapPin size={15} /></button>
+          <button type="button" aria-label="手动地图选点" onClick={() => { setManualCreateMode(true); setMessage(`请在地图目标位置${isTouchDevice ? '长按' : '双击'}，随后可拖动蓝色标记微调。`); searchInputRef.current?.blur(); }} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100/80 hover:text-slate-600 active:scale-95 transition-all" title="手动地图选点"><MapPin size={15} /></button>
+          {searchActions}
         </div>
 
         {searchSlot && <div className="mt-2" onClick={(event) => event.stopPropagation()}>{searchSlot}</div>}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Media, Place, type MediaUploadInput } from '../../types';
 import { api } from '../../api';
 import { describeBrowserLocationFailure } from '../../utils/browserLocation';
@@ -13,6 +13,7 @@ const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(CATEGORY_OPTIO
 interface MobilePhotoTimelineProps {
   media: Media[];
   places: Place[];
+  uploadRequest?: number;
   onUploadPhoto: (photoData: MediaUploadInput) => Promise<Media | void> | Promise<void>;
   onDeletePhoto: (id: string) => void;
   onToggleFavorite: (id: string, fav: boolean) => void;
@@ -24,6 +25,7 @@ interface MobilePhotoTimelineProps {
 export default function MobilePhotoTimeline({
   media,
   places,
+  uploadRequest = 0,
   onUploadPhoto,
   onDeletePhoto,
   onToggleFavorite,
@@ -40,6 +42,13 @@ export default function MobilePhotoTimeline({
   const [showLinkSheet, setShowLinkSheet] = useState(false);
   const [linkQuery, setLinkQuery] = useState('');
   const [justLinked, setJustLinked] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (uploadRequest <= 0) return;
+    setUploadPlaceId('');
+    setUploadError('');
+    setShowUploadModal(true);
+  }, [uploadRequest]);
 
   // 可并入的已有地点：按搜索词过滤，收藏优先，便于快速定位
   const linkablePlaces = useMemo(() => {
@@ -176,7 +185,7 @@ export default function MobilePhotoTimeline({
         <div className="flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-3.5 py-2.5 animate-fade-in">
           <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />
           <p className="min-w-0 flex-1 truncate text-[11px] font-bold text-emerald-800">照片已并入「{justLinked}」</p>
-          <button onClick={() => setJustLinked(null)} className="shrink-0 rounded-full p-1 text-emerald-500 active:scale-90"><X size={13} /></button>
+          <button aria-label="关闭照片关联提示" onClick={() => setJustLinked(null)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-emerald-500 active:scale-90"><X size={13} /></button>
         </div>
       )}
 
@@ -315,10 +324,10 @@ export default function MobilePhotoTimeline({
       {showUploadModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end animate-fade-in">
           <div className="absolute inset-0" onClick={() => setShowUploadModal(false)}></div>
-          <div className="relative w-full bg-white rounded-t-3xl shadow-2xl z-10 p-5 space-y-4 max-h-[80vh] overflow-y-auto animate-slide-up">
+          <div className="relative z-10 max-h-[80vh] w-full space-y-4 overflow-y-auto rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl animate-slide-up">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <h4 className="font-extrabold text-slate-800 text-sm">📷 上传精彩瞬间照片</h4>
-              <button aria-label="关闭照片上传" onClick={() => setShowUploadModal(false)} className="p-1 rounded-full bg-slate-100 text-slate-500 outline-none">
+              <button aria-label="关闭照片上传" onClick={() => setShowUploadModal(false)} className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 outline-none">
                 <X size={16} />
               </button>
             </div>
@@ -375,7 +384,7 @@ export default function MobilePhotoTimeline({
       {/* 关联到已有地点 — 底部选择面板 */}
       {showLinkSheet && photoPrompt && (
         <div className="fixed inset-0 z-50 flex items-end bg-slate-900/60 backdrop-blur-xs animate-fade-in" onClick={() => { setShowLinkSheet(false); setLinkQuery(''); }}>
-          <div className="flex max-h-[82vh] w-full flex-col rounded-t-3xl bg-white shadow-2xl animate-slide-up" onClick={(e) => e.stopPropagation()}>
+          <div className="flex max-h-[82vh] w-full flex-col rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="shrink-0 px-5 pb-3 pt-3">
               <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
               <div className="flex items-start justify-between gap-3">
@@ -383,11 +392,11 @@ export default function MobilePhotoTimeline({
                   <h4 className="text-sm font-black text-slate-800">关联到已有地点</h4>
                   <p className="mt-0.5 text-[11px] leading-snug text-slate-500">选择这张照片所属的地点，照片将并入该地点的相册。</p>
                 </div>
-                <button onClick={() => { setShowLinkSheet(false); setLinkQuery(''); }} className="shrink-0 rounded-full bg-slate-100 p-2 text-slate-500 active:scale-90"><X size={15} /></button>
+                <button aria-label="关闭关联地点" onClick={() => { setShowLinkSheet(false); setLinkQuery(''); }} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 active:scale-90"><X size={15} /></button>
               </div>
               <div className="mt-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <Search size={15} className="shrink-0 text-slate-400" />
-                <input value={linkQuery} onChange={(e) => setLinkQuery(e.target.value)} placeholder="搜索地点名称或地址" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-slate-300" />
+                <input value={linkQuery} onChange={(e) => setLinkQuery(e.target.value)} placeholder="搜索地点名称或地址" className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-slate-300" />
               </div>
             </div>
             <div className="flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
