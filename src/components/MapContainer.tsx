@@ -371,10 +371,14 @@ export default function MapContainer({
     loadAmap().then((AMap) => {
       if (disposed || !containerRef.current) return;
       // 多点分散时「质心 + 固定缩放」会落在空白区域，改为按包围盒直接算视野。
+      // 移动端（尤其夸克/微信内核）地图容器首帧可能未完成布局，clientWidth/Height 为 0；
+      // 此时退回窗口尺寸，避免走「质心 + zoom 11」的 fallback 缩到点位之间的空地。
+      const containerWidth = containerRef.current.clientWidth || window.innerWidth;
+      const containerHeight = containerRef.current.clientHeight || window.innerHeight;
       const initFit = computeFitView(
         places,
-        containerRef.current.clientWidth,
-        containerRef.current.clientHeight,
+        containerWidth,
+        containerHeight,
       );
       const initialZoom = places.length === 0
         ? 4
@@ -624,15 +628,24 @@ export default function MapContainer({
           getStatus?: () => { complete?: boolean };
           once?: (event: string, handler: () => void) => void;
         };
-        if (map?.getStatus?.().complete) {
-          requestAnimationFrame(doFit);
-          setTimeout(doFit, 600);
-        } else if (map?.once) {
-          map.once('complete', () => requestAnimationFrame(doFit));
-          setTimeout(doFit, 1200);
-        } else {
-          requestAnimationFrame(doFit);
-        }
+        // 轮询重试直到地图 complete 且标记已挂载，再执行 fit；
+        // 单次 setFitView 在 overlay 未挂载时会算出错误 bounds，导致视野缩到空白区域。
+        let fitAttempts = 0;
+        const tryFit = () => {
+          const complete = map?.getStatus ? map.getStatus().complete !== false : true;
+          if (complete && markersRef.current.length > 0) {
+            fitAllPlaces();
+            // AMap overlay 挂载是异步的，延迟再 fit 两次兜底
+            setTimeout(fitAllPlaces, 400);
+            setTimeout(fitAllPlaces, 1200);
+            return;
+          }
+          if (fitAttempts < 16) {
+            fitAttempts += 1;
+            setTimeout(tryFit, 250);
+          }
+        };
+        tryFit();
       }
     }
     return () => {
