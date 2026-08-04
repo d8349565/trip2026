@@ -75,7 +75,7 @@ type AMapInstance = {
   destroy: () => void;
   getZoom: () => number;
   setZoom: (zoom: number) => void;
-  setZoomAndCenter: (zoom: number, center: [number, number]) => void;
+  setZoomAndCenter: (zoom: number, center: [number, number], immediately?: boolean) => void;
   setCenter: (center: [number, number]) => void;
   setFitView: (
     overlays?: unknown[],
@@ -370,21 +370,16 @@ export default function MapContainer({
     let disposed = false;
     loadAmap().then((AMap) => {
       if (disposed || !containerRef.current) return;
-      // 多点分散时「质心 + 固定缩放」会落在空白区域，改为按包围盒直接算视野。
-      // 移动端（尤其夸克/微信内核）地图容器首帧可能未完成布局，clientWidth/Height 为 0；
-      // 此时退回窗口尺寸，避免走「质心 + zoom 11」的 fallback 缩到点位之间的空地。
-      const containerWidth = containerRef.current.clientWidth || window.innerWidth;
-      const containerHeight = containerRef.current.clientHeight || window.innerHeight;
-      const initFit = computeFitView(
-        places,
-        containerWidth,
-        containerHeight,
-      );
-      const initialZoom = places.length === 0
-        ? 4
-        : initFit?.zoom ?? (places.length > 1 ? 11 : 13);
+      // 首次进入对准最近一次添加的标记点（列表按创建时间升序，取最后一个）。
+      // 全览视野保留给「显示全部地点」按钮，需要时手动触发。
+      const latestPlace = [...places]
+        .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+        .pop();
+      const initialZoom = places.length === 0 ? 4 : 13;
       const map = new AMap.Map(containerRef.current, {
-        center: initFit?.center ?? initialCenterRef.current,
+        center: latestPlace
+          ? [latestPlace.longitude, latestPlace.latitude]
+          : initialCenterRef.current,
         zoom: initialZoom,
         mapStyle: AMAP_TRAVEL_STYLE,
         features: getMapFeatures(initialZoom),
@@ -635,17 +630,14 @@ export default function MapContainer({
       if (shouldFitAllPlacesInitially(markersRef.current.length, priorityFocus)) {
         // setFitView 需要地图完成首帧渲染且容器有尺寸才可靠；
         // complete 事件为准，再加一次延迟兑底，避免初始视野丢失。
-        // 首次进入：与点击「显示全部地点」按钮完全一致——等标记挂载后执行一次
-        // setFitView（immediately=true，无缩放动画），不做任何重复修正。
+        // 首次进入：对准最近一次添加的标记点（创建时间最新），无动画。
+        // 地图创建时若数据尚未加载，这里补一次定位。
         const tryFit = (attempt: number) => {
-          if (markersRef.current.length > 0) {
-            const mobile = (rootRef.current?.clientWidth ?? 0) < 640;
-            mapRef.current?.setFitView(
-              markersRef.current,
-              true,
-              mobile ? [150, 36, 120, 36] : [72, 72, 72, 72],
-              15,
-            );
+          const latest = [...places]
+            .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+            .pop();
+          if (latest && mapRef.current) {
+            mapRef.current.setZoomAndCenter(13, [latest.longitude, latest.latitude], true);
             return;
           }
           if (attempt < 16) setTimeout(() => tryFit(attempt + 1), 250);
