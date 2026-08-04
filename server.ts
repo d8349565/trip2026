@@ -1727,8 +1727,20 @@ export async function startServer(): Promise<Server | https.Server> {
     const distPath = config.clientDistPath;
     const indexPath = path.join(distPath, 'index.html');
     if (fs.existsSync(indexPath)) {
+      // 构建产物带内容 hash：文件名变化即新文件，可安全长缓存
+      app.use('/assets', express.static(path.join(distPath, 'assets'), {
+        immutable: true,
+        maxAge: '365d',
+      }));
+      // assets 未命中必须返回 404；落到 SPA 兜底会返回 HTML，
+      // 浏览器报误导性的 MIME 类型错误（如部署不完整时）
+      app.use('/assets', (_req, res) => {
+        res.status(404).end();
+      });
       app.use(express.static(distPath));
       app.get('*', (req, res) => {
+        // HTML 每次回源校验，避免浏览器缓存引用已删除资源的旧版本
+        res.setHeader('Cache-Control', 'no-cache');
         res.sendFile(indexPath);
       });
     } else {
