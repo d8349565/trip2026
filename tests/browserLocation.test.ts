@@ -70,6 +70,51 @@ test('连续采样会选择达到目标精度的位置并停止监听', async ()
   assert.equal(geolocation.wasCleared(), true);
 });
 
+test('先报告可用的粗略位置，再采用短暂采样内更准确的结果', async () => {
+  const progressAccuracy: number[] = [];
+  const geolocation = fakeGeolocation((success) => {
+    success(position(30, 120, 80));
+    setTimeout(() => success(position(30.1, 120.1, 18)), 2);
+  });
+
+  const pending = getBestBrowserLocation({
+    secureContext: true,
+    geolocation,
+    timeoutMs: 100,
+    targetSettleMs: 5,
+    onProgress: (fix) => progressAccuracy.push(fix.accuracyM),
+  });
+
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(progressAccuracy, [80]);
+
+  const result = await pending;
+  assert.equal(result.ok, true);
+  assert.equal((result as Extract<BrowserLocationResult, { ok: true }>).fix.accuracyM, 18);
+  assert.deepEqual(progressAccuracy, [80, 18]);
+  assert.equal(geolocation.wasCleared(), true);
+});
+
+test('不会立即采用第一个看似精确但随后被更优样本替代的位置', async () => {
+  const geolocation = fakeGeolocation((success) => {
+    success(position(31, 121, 20));
+    success(position(30, 120, 5));
+  });
+
+  const result = await getBestBrowserLocation({
+    secureContext: true,
+    geolocation,
+    timeoutMs: 100,
+    targetSettleMs: 5,
+  });
+
+  assert.equal(result.ok, true);
+  const fix = (result as Extract<BrowserLocationResult, { ok: true }>).fix;
+  assert.equal(fix.latitude, 30);
+  assert.equal(fix.longitude, 120);
+  assert.equal(fix.accuracyM, 5);
+});
+
 test('超时后拒绝超过最大阈值的粗略位置', async () => {
   const geolocation = fakeGeolocation((success) => {
     success(position(30, 120, 260));
