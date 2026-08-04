@@ -1177,12 +1177,13 @@ const MEDIA_FILE_CONTENT_TYPES: Record<string, string> = {
   '.gif': 'image/gif',
   '.avif': 'image/avif',
   '.heic': 'image/heic',
+  '.heif': 'image/heif',
 };
 
-type ImageMime = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'image/avif' | 'image/heic';
+type ImageMime = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | 'image/avif' | 'image/heic' | 'image/heif';
 
 const UPLOAD_MIME_WHITELIST = new Set<ImageMime>([
-  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/heic',
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/heic', 'image/heif',
 ]);
 
 const MIME_TO_EXTENSION: Record<ImageMime, string> = {
@@ -1192,6 +1193,7 @@ const MIME_TO_EXTENSION: Record<ImageMime, string> = {
   'image/gif': '.gif',
   'image/avif': '.avif',
   'image/heic': '.heic',
+  'image/heif': '.heif',
 };
 
 // Identify the real image type from magic bytes — the declared MIME is never trusted.
@@ -1207,9 +1209,14 @@ function sniffImageMime(buffer: Buffer): ImageMime | null {
   if (buffer.length >= 12 && buffer.toString('ascii', 4, 8) === 'ftyp') {
     const brand = buffer.toString('ascii', 8, 12);
     if (brand === 'avif' || brand === 'avis') return 'image/avif';
-    if (['heic', 'heix', 'hevc', 'mif1', 'msf1'].includes(brand)) return 'image/heic';
+    if (['heic', 'heix', 'heif', 'hevc', 'mif1', 'msf1'].includes(brand)) return 'image/heic';
   }
   return null;
+}
+
+function matchesSniffedImageMime(sniffedMime: ImageMime, declaredMime: string): boolean {
+  return sniffedMime === declaredMime
+    || (sniffedMime === 'image/heic' && declaredMime === 'image/heif');
 }
 
 type ReferableResource = ProtectedResource & { id: string };
@@ -1305,9 +1312,9 @@ app.post('/api/media/upload', (req, res) => {
   const declaredMime = matches[1].toLowerCase();
   const buffer = Buffer.from(matches[2], 'base64');
   const sniffedMime = sniffImageMime(buffer);
-  if (!sniffedMime || !UPLOAD_MIME_WHITELIST.has(sniffedMime) || sniffedMime !== declaredMime) {
+  if (!sniffedMime || !UPLOAD_MIME_WHITELIST.has(sniffedMime) || !matchesSniffedImageMime(sniffedMime, declaredMime)) {
     return res.status(400).json({
-      error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: '仅支持 JPEG/PNG/WebP/GIF/AVIF/HEIC 图片，且文件内容须与声明类型一致' },
+      error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: '仅支持 JPEG/PNG/WebP/GIF/AVIF/HEIC/HEIF 图片，且文件内容须与声明类型一致' },
     });
   }
 
@@ -1316,7 +1323,7 @@ app.post('/api/media/upload', (req, res) => {
   const extension = path.extname(safeFilename).toLowerCase();
   if (extension && !MEDIA_FILE_CONTENT_TYPES[extension]) {
     return res.status(400).json({
-      error: { code: 'UNSUPPORTED_FILE_EXTENSION', message: '文件扩展名不支持，仅允许 JPG/PNG/WebP/GIF/AVIF/HEIC' },
+      error: { code: 'UNSUPPORTED_FILE_EXTENSION', message: '文件扩展名不支持，仅允许 JPG/PNG/WebP/GIF/AVIF/HEIC/HEIF' },
     });
   }
   const relativePath = path.join('places', `${Date.now()}_${safeFilename || 'photo.jpg'}${extension ? '' : MIME_TO_EXTENSION[sniffedMime]}`);

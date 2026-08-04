@@ -21,12 +21,33 @@ export interface PreparedPhoto {
 
 const MAX_DIMENSION = 1200;
 const JPEG_QUALITY = 0.85;
+const HEIC_MIME_TYPES = new Set(['image/heic', 'image/heif']);
 
 export interface PreparePhotoOptions {
   /**
    * 仅用于“刚刚拍照”入口。历史相册照片禁止自动套用上传时的位置。
    */
   allowBrowserLocationFallback?: boolean;
+}
+
+export function isHeicPhoto(file: Pick<File, 'name' | 'type'>): boolean {
+  return HEIC_MIME_TYPES.has(file.type.toLowerCase()) || /\.(?:heic|heif)$/i.test(file.name);
+}
+
+async function convertHeicToJpeg(file: File): Promise<File> {
+  // heic2any creates a Web Worker as soon as its module is evaluated, so keep
+  // it out of server-side and test-module loading paths.
+  const { default: heic2any } = await import('heic2any');
+  const converted = await heic2any({
+    blob: file,
+    toType: 'image/jpeg',
+    quality: JPEG_QUALITY,
+  });
+  const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+  if (!convertedBlob) throw new Error('HEIC 图片转换失败');
+
+  const baseName = file.name.replace(/\.(?:heic|heif)$/i, '') || 'photo';
+  return new File([convertedBlob], `${baseName}.jpg`, { type: 'image/jpeg' });
 }
 
 type PhotoLocationFields = Pick<MediaUploadInput,
@@ -167,8 +188,11 @@ export async function preparePhotoForUpload(
     }
   }
 
-  const dataUrl = await compressToDataUrl(file);
-  return { fileName: file.name, fileSize: file.size, dataUrl, exif };
+  // Chrome and many Android browsers cannot decode HEIC in an HTMLImageElement.
+  // Convert only after reading EXIF from the original, because conversion strips it.
+  const uploadFile = isHeicPhoto(file) ? await convertHeicToJpeg(file) : file;
+  const dataUrl = await compressToDataUrl(uploadFile);
+  return { fileName: uploadFile.name, fileSize: file.size, dataUrl, exif };
 }
 
 function compressToDataUrl(file: File): Promise<string> {

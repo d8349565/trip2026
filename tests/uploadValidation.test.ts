@@ -12,6 +12,7 @@ process.env.SESSION_SECRET = 'test-session-secret-with-at-least-32-characters';
 
 const JPEG = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01]);
 const PNG = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D]);
+const HEIC = Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]);
 
 function cookieFrom(response: Response): string {
   const header = response.headers.get('set-cookie');
@@ -179,4 +180,14 @@ test('uploads enforce the image whitelist and cross-resource references', async 
   const pngFile = await fetch(`${baseUrl}${pngMedia.file_path}`, { headers: { Cookie: adminCookie } });
   assert.equal(pngFile.status, 200);
   assert.equal(pngFile.headers.get('content-type'), 'image/png');
+
+  // HEIF is the standard MIME alias used by some Apple devices for HEIC containers.
+  const heifResponse = await upload(adminCookie, {
+    filename: 'iphone.heif', dataUrl: dataUrl('image/heif', HEIC),
+  });
+  assert.equal(heifResponse.status, 200);
+  const heifMedia = await heifResponse.json();
+  const heifFile = await fetch(`${baseUrl}${heifMedia.file_path}`, { headers: { Cookie: adminCookie } });
+  assert.equal(heifFile.status, 200);
+  assert.equal(heifFile.headers.get('content-type'), 'image/heif');
 });

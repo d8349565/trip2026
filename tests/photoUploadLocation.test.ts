@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { confirmedPhotoLocationFields } from '../src/utils/photoUpload';
+import { confirmedPhotoLocationFields, isHeicPhoto } from '../src/utils/photoUpload';
+
+test('HEIC/HEIF 照片按 MIME 或扩展名识别，以便在上传前转换为 JPEG', () => {
+  assert.equal(isHeicPhoto({ name: 'iphone.heic', type: 'image/heic' }), true);
+  assert.equal(isHeicPhoto({ name: 'iphone.heif', type: '' }), true);
+  assert.equal(isHeicPhoto({ name: 'photo.jpg', type: 'image/jpeg' }), false);
+});
 
 test('未移动照片标记时保留原始 EXIF WGS84 来源', () => {
   const result = confirmedPhotoLocationFields({
