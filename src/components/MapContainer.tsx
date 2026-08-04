@@ -549,10 +549,22 @@ export default function MapContainer({
         content.appendChild(countBadge);
 
         const expandCluster = () => {
-          map.setZoomAndCenter(
-            Math.min(14, Math.max(map.getZoom() + 2, 8)),
-            [cluster.longitude, cluster.latitude],
+          // 不能以质心为中心放大——质心是「虚拟位置」，放大后那里是空的，
+          // 真实点散在四周。复用「显示全部地点」同款的包围盒视野计算，
+          // 确保放大后每个成员点都在画面内。
+          const fit = computeFitView(
+            cluster.places,
+            containerRef.current?.clientWidth || window.innerWidth,
+            containerRef.current?.clientHeight || window.innerHeight,
           );
+          if (fit) {
+            map.setZoomAndCenter(Math.min(15, Math.max(fit.zoom, map.getZoom() + 2)), fit.center);
+          } else {
+            map.setZoomAndCenter(
+              Math.min(15, Math.max(map.getZoom() + 3, 12)),
+              [cluster.longitude, cluster.latitude],
+            );
+          }
         };
         content.addEventListener('click', (event) => {
           event.stopPropagation();
