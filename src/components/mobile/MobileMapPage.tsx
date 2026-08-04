@@ -4,7 +4,7 @@ import MapContainer from '../MapContainer';
 import MobilePlaceMiniCard from './MobilePlaceMiniCard';
 import MobileFullscreenToggle from './MobileFullscreenToggle';
 import { pickPlaceCover } from '../../utils/placeCover';
-import { MapPin, X, Heart, Sparkles, LayoutList, MapPinPlus, Waves, Mountain, UtensilsCrossed, LayoutGrid, Crosshair, LocateFixed } from 'lucide-react';
+import { MapPin, X, Heart, Sparkles, LayoutList, MapPinPlus, Crosshair, LocateFixed, SlidersHorizontal, Ellipsis } from 'lucide-react';
 
 interface MobileMapPageProps {
   places: Place[];
@@ -52,6 +52,7 @@ export default function MobileMapPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>(''); // empty means all
   const [showFilterSheet, setShowFilterSheet] = useState(false);
+  const [showActionSheet, setShowActionSheet] = useState(false);
   const [showListView, setShowListView] = useState(false);
   const [locateRequest, setLocateRequest] = useState(0);
   const [fitAllRequest, setFitAllRequest] = useState(0);
@@ -84,20 +85,21 @@ export default function MobileMapPage({
     return true;
   });
 
-  const hotCategories = [
-    { key: '', label: '全部', icon: <LayoutGrid size={14} /> },
-    { key: 'stream', label: '溯溪', icon: <Waves size={14} /> },
-    { key: 'scenic', label: '景点', icon: <Mountain size={14} /> },
-    { key: 'food', label: '美食', icon: <UtensilsCrossed size={14} /> },
-  ];
+  const hasActiveFilters = Boolean(
+    activeCategory || selectedDifficulty || wetFilter || favoritesOnly || recommendedOnly,
+  );
 
-  const showAllPlaces = () => {
-    setSearchQuery('');
+  const resetFilters = () => {
     setActiveCategory('');
     setSelectedDifficulty('');
     setWetFilter(false);
     setFavoritesOnly(false);
     setRecommendedOnly(false);
+  };
+
+  const showAllPlaces = () => {
+    setSearchQuery('');
+    resetFilters();
     onSelectPlace(null);
     setFitAllRequest((request) => request + 1);
   };
@@ -129,63 +131,33 @@ export default function MobileMapPage({
           categoryIcons={categoryIcons}
           searchSlot={
             <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none" onClick={(e) => e.stopPropagation()}>
-              {hotCategories.map(cat => {
-                const isActive = activeCategory === cat.key;
-                return (
-                  <button
-                    key={cat.key}
-                    id={`m_cat_${cat.key || 'all'}`}
-                    onClick={() => { setActiveCategory(cat.key); onSelectPlace(null); }}
-                    className={`px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border transition-all duration-200 flex items-center gap-1.5 shrink-0 outline-none active:scale-[0.96] ${
-                      isActive
-                        ? 'bg-gradient-to-b from-blue-500 to-blue-600 border-transparent text-white shadow-md shadow-blue-500/25'
-                        : 'bg-white/70 border-white/50 text-slate-500 backdrop-blur-sm hover:bg-white/90 shadow-sm'
-                    }`}
-                  >
-                    {cat.icon}
-                    <span>{cat.label}</span>
-                  </button>
-                );
-              })}
               <button
-                id="m_cat_more"
+                id="m_btn_open_filter"
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={showFilterSheet}
                 onClick={() => setShowFilterSheet(true)}
-                className="px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border border-white/50 bg-white/70 text-slate-500 backdrop-blur-sm outline-none shrink-0 flex items-center gap-1.5 shadow-sm hover:bg-white/90 active:scale-[0.96] transition-all duration-200"
-              >
-                <Sparkles size={13} className="text-violet-400" />
-                <span>筛选</span>
-              </button>
-
-              <button
-                id="m_btn_show_all_places"
-                aria-label="显示全部地点"
-                onClick={showAllPlaces}
-                className="px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border border-white/50 bg-white/70 text-slate-500 backdrop-blur-sm outline-none shrink-0 flex items-center gap-1.5 shadow-sm hover:bg-white/90 active:scale-[0.96] transition-all duration-200"
-              >
-                <LocateFixed size={13} />
-                <span>全图</span>
-              </button>
-
-              <button
-                id="m_btn_toggle_list"
-                onClick={() => setShowListView(!showListView)}
-                className={`px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border outline-none shrink-0 flex items-center gap-1.5 active:scale-[0.96] transition-all duration-200 ${
-                  showListView
-                    ? 'bg-gradient-to-b from-blue-500 to-blue-600 border-transparent text-white shadow-md shadow-blue-500/25'
-                    : 'bg-white/70 border-white/50 text-slate-500 backdrop-blur-sm hover:bg-white/90 shadow-sm'
+                className={`px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border outline-none shrink-0 flex items-center gap-1.5 shadow-sm active:scale-[0.96] transition-all duration-200 ${
+                  hasActiveFilters
+                    ? 'border-blue-500 bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-blue-500/25'
+                    : 'border-white/50 bg-white/80 text-slate-600 backdrop-blur-sm hover:bg-white'
                 }`}
               >
-                <LayoutList size={13} />
-                <span>列表</span>
+                <SlidersHorizontal size={14} />
+                <span>筛选</span>
+                {hasActiveFilters && <span aria-label="已启用筛选" className="h-1.5 w-1.5 rounded-full bg-white" />}
               </button>
 
               <button
-                id="m_btn_add_place"
-                onClick={onRequestEditor}
-                className="px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border border-transparent bg-gradient-to-b from-blue-500 to-blue-600 text-white outline-none shrink-0 flex items-center gap-1.5 shadow-md shadow-blue-500/25 active:scale-[0.96] transition-all duration-200"
+                id="m_btn_open_actions"
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={showActionSheet}
+                onClick={() => setShowActionSheet(true)}
+                className="px-3 py-2 rounded-xl text-[11px] font-semibold whitespace-nowrap border border-white/50 bg-white/80 text-slate-600 backdrop-blur-sm outline-none shrink-0 flex items-center gap-1.5 shadow-sm hover:bg-white active:scale-[0.96] transition-all duration-200"
               >
-                <MapPinPlus size={13} />
-                <span>添加</span>
+                <Ellipsis size={15} />
+                <span>操作</span>
               </button>
             </div>
           }
@@ -321,11 +293,7 @@ export default function MobileMapPage({
             <div className="pt-3 border-t border-slate-100 flex gap-3">
               <button
                 onClick={() => {
-                  setActiveCategory('');
-                  setSelectedDifficulty('');
-                  setWetFilter(false);
-                  setFavoritesOnly(false);
-                  setRecommendedOnly(false);
+                  resetFilters();
                 }}
                 className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs"
               >
@@ -342,7 +310,39 @@ export default function MobileMapPage({
         </div>
       )}
 
-      {/* 7. Places List View Overlay Modal */}
+      {/* 7. Secondary map actions are grouped to keep the map canvas clear. */}
+      {showActionSheet && (
+        <div className="fixed inset-0 z-50 flex items-end bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="absolute inset-0" onClick={() => setShowActionSheet(false)}></div>
+          <div role="dialog" aria-modal="true" aria-label="地图操作" className="relative z-10 w-full space-y-3 rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl animate-slide-up">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-base font-extrabold text-slate-800">地图操作</h4>
+                <p className="mt-0.5 text-xs text-slate-400">将视野、列表和录入集中在这里</p>
+              </div>
+              <button type="button" aria-label="关闭地图操作" onClick={() => setShowActionSheet(false)} className="rounded-full bg-slate-100 p-2 text-slate-500 outline-none active:scale-90">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <button id="m_action_show_all" type="button" onClick={() => { setShowActionSheet(false); showAllPlaces(); }} className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-2 text-xs font-bold text-slate-700 active:scale-[0.97]">
+                <LocateFixed size={19} className="text-blue-600" />
+                <span>显示全图</span>
+              </button>
+              <button id="m_action_show_list" type="button" onClick={() => { setShowActionSheet(false); setShowListView(true); }} className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-2 text-xs font-bold text-slate-700 active:scale-[0.97]">
+                <LayoutList size={19} className="text-violet-600" />
+                <span>地点列表</span>
+              </button>
+              <button id="m_action_add_place" type="button" onClick={() => { setShowActionSheet(false); onRequestEditor(); }} className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl bg-gradient-to-b from-blue-500 to-blue-600 px-2 text-xs font-bold text-white shadow-md shadow-blue-500/25 active:scale-[0.97]">
+                <MapPinPlus size={19} />
+                <span>添加地点</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Places List View Overlay Modal */}
       {showListView && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center animate-fade-in">
           <div className="absolute inset-0" onClick={() => setShowListView(false)}></div>

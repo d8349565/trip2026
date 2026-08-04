@@ -81,7 +81,7 @@ test('place rating display tolerates null database values', () => {
   assert.equal(formatPlaceRating(4), '4.0');
 });
 
-test('mobile map exposes an explicit show-all-places action', () => {
+test('mobile map collapses secondary map controls into filter and actions entry points', () => {
   const props = {
     places: [],
     media: [],
@@ -104,5 +104,8 @@ test('mobile map exposes an explicit show-all-places action', () => {
   } as unknown as React.ComponentProps<typeof MobileMapPage>;
 
   const html = renderToStaticMarkup(React.createElement(MobileMapPage, props));
-  assert.match(html, /id="m_btn_show_all_places"/);
+  assert.match(html, /id="m_btn_open_filter"/);
+  assert.match(html, /id="m_btn_open_actions"/);
+  assert.doesNotMatch(html, /id="m_cat_all"/);
+  assert.doesNotMatch(html, /id="m_btn_show_all_places"/);
 });
