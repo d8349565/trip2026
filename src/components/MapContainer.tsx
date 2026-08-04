@@ -635,29 +635,22 @@ export default function MapContainer({
       if (shouldFitAllPlacesInitially(markersRef.current.length, priorityFocus)) {
         // setFitView 需要地图完成首帧渲染且容器有尺寸才可靠；
         // complete 事件为准，再加一次延迟兑底，避免初始视野丢失。
-        const doFit = () => fitAllPlaces();
-        const map = mapRef.current as unknown as {
-          getStatus?: () => { complete?: boolean };
-          once?: (event: string, handler: () => void) => void;
-        };
-        // 轮询重试直到地图 complete 且标记已挂载，再执行 fit；
-        // 单次 setFitView 在 overlay 未挂载时会算出错误 bounds，导致视野缩到空白区域。
-        let fitAttempts = 0;
-        const tryFit = () => {
-          const complete = map?.getStatus ? map.getStatus().complete !== false : true;
-          if (complete && markersRef.current.length > 0) {
-            fitAllPlaces();
-            // AMap overlay 挂载是异步的，延迟再 fit 两次兜底
-            setTimeout(fitAllPlaces, 400);
-            setTimeout(fitAllPlaces, 1200);
+        // 首次进入：与点击「显示全部地点」按钮完全一致——等标记挂载后执行一次
+        // setFitView（immediately=true，无缩放动画），不做任何重复修正。
+        const tryFit = (attempt: number) => {
+          if (markersRef.current.length > 0) {
+            const mobile = (rootRef.current?.clientWidth ?? 0) < 640;
+            mapRef.current?.setFitView(
+              markersRef.current,
+              true,
+              mobile ? [150, 36, 120, 36] : [72, 72, 72, 72],
+              15,
+            );
             return;
           }
-          if (fitAttempts < 16) {
-            fitAttempts += 1;
-            setTimeout(tryFit, 250);
-          }
+          if (attempt < 16) setTimeout(() => tryFit(attempt + 1), 250);
         };
-        tryFit();
+        tryFit(0);
       }
     }
     return () => {
