@@ -9,6 +9,8 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import https from 'https';
+import argon2 from 'argon2';
+import { z } from 'zod';
 import { fileURLToPath } from 'url';
 import type { Server } from 'node:http';
 import { DbEngine } from './src/dbEngine';
@@ -546,6 +548,56 @@ app.post('/api/admin/invites', (req, res) => {
 app.get('/api/admin/invites', (req, res) => {
   const db = dbEngine.getRawDb();
   res.json(db.invites);
+});
+
+const adminCreateUserSchema = z.object({
+  username: z.string().trim().min(3).max(32).regex(/^[\p{L}\p{N}_.-]+$/u),
+  password: z.string().min(10).max(128),
+  role: z.enum(['admin', 'user']).optional(),
+});
+
+app.post('/api/admin/users', async (req, res) => {
+  const parsed = adminCreateUserSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: '用户名需 3-32 位（字母/数字/_.-），密码至少 10 位' } });
+  }
+  try {
+    const user = dbEngine.createUser({
+      id: `u_${crypto.randomUUID()}`,
+      username: parsed.data.username,
+      passwordHash: await argon2.hash(parsed.data.password, { type: argon2.argon2id }),
+      role: parsed.data.role ?? 'user',
+      createdAt: new Date().toISOString(),
+    });
+    res.status(201).json(user);
+  } catch (error) {
+    // 除事务内显式查重外，并发写入仍可能撞上 username 的 UNIQUE 约束
+    // （better-sqlite3 抛出 SQLITE_CONSTRAINT*），同样按重名处理
+    const sqliteCode = (error as { code?: unknown })?.code;
+    const isUsernameConflict = (error instanceof Error && error.message === 'USERNAME_EXISTS')
+      || (typeof sqliteCode === 'string' && sqliteCode.startsWith('SQLITE_CONSTRAINT'));
+    if (isUsernameConflict) {
+      return res.status(409).json({ error: { code: 'USERNAME_EXISTS', message: '用户名已存在' } });
+    }
+    console.error('Create user failed', error);
+    res.status(500).json({ error: { code: 'USER_CREATE_FAILED', message: '无法创建用户' } });
+  }
+});
+
+const adminResetPasswordSchema = z.object({
+  password: z.string().min(10).max(128),
+});
+
+app.post('/api/admin/users/:id/password', async (req, res) => {
+  const parsed = adminResetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: '新密码至少 10 位' } });
+  }
+  const user = dbEngine.getUserById(req.params.id);
+  if (!user) return res.status(404).json({ error: { code: 'USER_NOT_FOUND', message: '用户不存在' } });
+  dbEngine.setPassword(user.id, await argon2.hash(parsed.data.password, { type: argon2.argon2id }));
+  dbEngine.deleteUserSessions(user.id);
+  res.status(204).end();
 });
 
 // ---------------- PLACES API ----------------

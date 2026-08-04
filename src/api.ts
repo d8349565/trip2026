@@ -549,6 +549,34 @@ export const api = {
     return res.json();
   },
 
+  getAdminUsers: async (): Promise<User[]> => {
+    return request<User[]>('/api/admin/users');
+  },
+
+  createAdminUser: async (data: { username: string; password: string; role?: 'admin' | 'user' }): Promise<User> => {
+    return request<User>('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  },
+
+  updateAdminUser: async (id: string, patch: { is_active?: boolean; role?: 'admin' | 'user' }): Promise<User> => {
+    return request<User>(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    });
+  },
+
+  resetAdminUserPassword: async (id: string, password: string): Promise<void> => {
+    return request<void>(`/api/admin/users/${id}/password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+  },
+
   createInvite: async (data: any, userId?: string): Promise<InviteCode> => {
     const res = await fetch(`${API_BASE}/api/admin/invites`, {
       method: 'POST',

@@ -12,7 +12,7 @@
     "start": "node dist/server/index.mjs",
     "clean": "node scripts/clean.mjs",
     "lint": "tsc --noEmit",
-    "test": "tsx --test tests/server.test.ts tests/sqliteStore.test.ts tests/placeOverview.test.tsx tests/browserLocation.test.ts tests/mediaLocation.test.ts tests/photoUploadLocation.test.ts tests/photoMetadata.test.ts tests/mapClusters.test.ts tests/mapViewport.test.ts tests/geocoding.test.ts tests/uxUtils.test.ts tests/placeCover.test.ts tests/mediaAccess.test.ts tests/batchDetails.test.ts tests/uploadValidation.test.ts",
+    "test": "tsx --test tests/server.test.ts tests/sqliteStore.test.ts tests/adminUsers.test.ts tests/placeOverview.test.tsx tests/browserLocation.test.ts tests/mediaLocation.test.ts tests/photoUploadLocation.test.ts tests/photoMetadata.test.ts tests/mapClusters.test.ts tests/mapViewport.test.ts tests/geocoding.test.ts tests/uxUtils.test.ts tests/placeCover.test.ts tests/mediaAccess.test.ts tests/batchDetails.test.ts tests/uploadValidation.test.ts",
     "test:production": "node scripts/verify-production.mjs",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:import": "tsx scripts/import-json-to-sqlite.ts"

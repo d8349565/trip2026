@@ -78,6 +78,12 @@ export class DbEngine {
     return user;
   }
 
+  createUser(input: Parameters<SqliteStore['createUser']>[0]) {
+    const user = this.store.createUser(input);
+    this.db = this.store.readSnapshot();
+    return user;
+  }
+
   getSession(id: string) {
     return this.store.getSession(id);
   }

@@ -233,6 +233,36 @@ export class SqliteStore {
     })();
   }
 
+  createUser(input: {
+    id: string;
+    username: string;
+    passwordHash: string;
+    role: 'admin' | 'user';
+    createdAt: string;
+  }): User {
+    return this.database.transaction(() => {
+      if (this.database.prepare('SELECT 1 FROM users WHERE username = ? COLLATE NOCASE').get(input.username)) {
+        throw new Error('USERNAME_EXISTS');
+      }
+      const user: User = {
+        id: input.id,
+        username: input.username,
+        role: input.role,
+        is_active: true,
+        created_at: input.createdAt,
+      };
+      this.insert('users', {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        is_active: 1,
+        created_at: user.created_at,
+      });
+      this.insert('passwords', { user_id: user.id, password_hash: input.passwordHash, algorithm: 'argon2id' });
+      return user;
+    })();
+  }
+
   getSession(id: string): { data: string; expiresAt: string } | undefined {
     const row = this.database.prepare('SELECT data_json, expires_at FROM sessions WHERE id = ?').get(id) as {
       data_json: string;
