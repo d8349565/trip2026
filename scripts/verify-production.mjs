@@ -60,6 +60,21 @@ try {
   assert.equal(page.status, 200);
   assert.match(await page.text(), /<div id="root"><\/div>/);
 
+  // PWA 静态资源必须可被匿名访问（安装流程在登录前就会拉取 manifest 和图标）
+  const manifestResponse = await fetch(`http://127.0.0.1:${port}/manifest.webmanifest`);
+  assert.equal(manifestResponse.status, 200);
+  const manifest = await manifestResponse.json();
+  assert.equal(manifest.short_name, '旅行足迹');
+  assert.ok(Array.isArray(manifest.icons) && manifest.icons.length >= 2);
+  const swResponse = await fetch(`http://127.0.0.1:${port}/sw.js`);
+  assert.equal(swResponse.status, 200);
+  assert.match(await swResponse.text(), /addEventListener\('fetch'/);
+  for (const iconPath of ['/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png']) {
+    const iconResponse = await fetch(`http://127.0.0.1:${port}${iconPath}`);
+    assert.equal(iconResponse.status, 200, `${iconPath} should be served`);
+    assert.match(iconResponse.headers.get('content-type') ?? '', /image\/png/);
+  }
+
   assert.equal((await fetch(`http://127.0.0.1:${port}/api/places`)).status, 401);
   const loginResponse = await fetch(`http://127.0.0.1:${port}/api/auth/login`, {
     method: 'POST',

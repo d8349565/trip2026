@@ -60,6 +60,7 @@ src/utils/                   坐标、EXIF、上传等工具
 src/types.ts                 领域类型
 src/api.ts                   前端 API 层
 src/App.tsx                  前端入口
+public/                      PWA manifest、Service Worker、图标（构建时原样拷贝到 dist/client）
 migrations/                  SQL 迁移
 scripts/                     构建、迁移、导入和验收脚本
 tests/                       自动化测试

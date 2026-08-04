@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>旅行足迹 - 探索世界 · 记录美好</title>
+    <!-- PWA：安装后全屏显示；iOS 走 apple-* 系列 meta（不支持 manifest display） -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="旅行足迹" />
   </head>
   <body class="bg-[#f8fafc] text-slate-800 antialiased selection:bg-blue-100">
     <div id="root"></div>
