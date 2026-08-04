@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@theme {
+  /* slate-100 与 slate-200 的中间色：项目组件大量使用 border-slate-150，
+     Tailwind 默认色阶没有该档位，不在此定义则类名静默失效（边框退回 currentColor） */
+  --color-slate-150: #e9eef4;
+}
+
 /* 移动端：输入框字号统一 16px，避免 iOS Safari 聚焦时自动缩放页面 */
 @media (max-width: 767px) {
   input,
