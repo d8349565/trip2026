@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { MapLocation, Media, Place, PlaceCategory } from '../../types';
 import MapContainer from '../MapContainer';
 import MobilePlaceMiniCard from './MobilePlaceMiniCard';
-import MobileFullscreenToggle from './MobileFullscreenToggle';
 import { pickPlaceCover } from '../../utils/placeCover';
-import { MapPin, X, Heart, Sparkles, LayoutList, Crosshair, LocateFixed, SlidersHorizontal, Ellipsis, UserRound } from 'lucide-react';
+import { MapPin, X, Heart, Sparkles, LayoutList, Crosshair, LocateFixed, Search, SlidersHorizontal, UserRound } from 'lucide-react';
 
 interface MobileMapPageProps {
   places: Place[];
@@ -55,6 +54,7 @@ export default function MobileMapPage({
 }: MobileMapPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>(''); // empty means all
+  const [showMapSearch, setShowMapSearch] = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [showListView, setShowListView] = useState(false);
@@ -133,40 +133,7 @@ export default function MobileMapPage({
           categoryColors={categoryColors}
           categoryLabels={categoryLabels}
           categoryIcons={categoryIcons}
-          searchActions={
-            <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-              <button
-                id="m_btn_open_filter"
-                type="button"
-                aria-haspopup="dialog"
-                aria-expanded={showFilterSheet}
-                onClick={() => setShowFilterSheet(true)}
-                aria-label="打开地图筛选"
-                title="筛选地点"
-                className={`flex h-9 w-9 items-center justify-center rounded-xl border outline-none shadow-sm active:scale-[0.96] transition-all duration-200 ${
-                  hasActiveFilters
-                    ? 'border-blue-500 bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-blue-500/25'
-                    : 'border-white/50 bg-white/80 text-slate-600 backdrop-blur-sm hover:bg-white'
-                }`}
-              >
-                <SlidersHorizontal size={14} />
-                {hasActiveFilters && <span aria-label="已启用筛选" className="h-1.5 w-1.5 rounded-full bg-white" />}
-              </button>
-
-              <button
-                id="m_btn_open_actions"
-                type="button"
-                aria-haspopup="dialog"
-                aria-expanded={showActionSheet}
-                onClick={() => setShowActionSheet(true)}
-                aria-label="打开地图操作"
-                title="地图操作"
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/50 bg-white/80 text-slate-600 backdrop-blur-sm outline-none shadow-sm hover:bg-white active:scale-[0.96] transition-all duration-200"
-              >
-                <Ellipsis size={15} />
-              </button>
-            </div>
-          }
+          mobileSearchExpanded={showMapSearch}
         />
       </div>
 
@@ -180,22 +147,57 @@ export default function MobileMapPage({
         {profileLabel ? <span aria-hidden="true">{profileLabel.slice(0, 1).toUpperCase()}</span> : <UserRound size={18} />}
       </button>
 
-      {/* 4. Current location lives in the lower thumb zone. */}
-      {!showListView && (
+      {/* 4. 手机端地图工具集中在拇指区；仅保留搜索、筛选、显示全部与定位。 */}
+      <div className="absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-3 z-30 flex flex-col gap-2">
+        <button
+          id="m_btn_open_search"
+          type="button"
+          onClick={() => setShowMapSearch((open) => !open)}
+          aria-expanded={showMapSearch}
+          aria-label={showMapSearch ? '收起地图搜索' : '打开地图搜索'}
+          title={showMapSearch ? '收起搜索' : '搜索地点'}
+          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-100 bg-white/95 text-slate-600 shadow-lg backdrop-blur-md outline-none transition-all hover:bg-slate-50 active:scale-95"
+        >
+          {showMapSearch ? <X size={18} /> : <Search size={18} />}
+        </button>
+        <button
+          id="m_btn_open_filter"
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={showFilterSheet}
+          onClick={() => setShowFilterSheet(true)}
+          aria-label="打开地图筛选"
+          title="筛选地点"
+          className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border shadow-lg backdrop-blur-md outline-none transition-all hover:bg-blue-50 active:scale-95 ${
+            hasActiveFilters
+              ? 'border-blue-500 bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-blue-500/25'
+              : 'border-slate-100 bg-white/95 text-slate-600'
+          }`}
+        >
+          <SlidersHorizontal size={18} />
+          {hasActiveFilters && <span aria-label="已启用筛选" className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-white" />}
+        </button>
+        <button
+          id="m_btn_show_all"
+          type="button"
+          onClick={showAllPlaces}
+          aria-label="显示全部地点"
+          title="显示全部地点"
+          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-100 bg-white/95 text-blue-600 shadow-lg backdrop-blur-md outline-none transition-all hover:bg-blue-50 active:scale-95"
+        >
+          <LocateFixed size={18} />
+        </button>
         <button
           id="m_btn_locate"
           type="button"
           onClick={() => setLocateRequest(Date.now())}
           aria-label="定位到当前位置"
-          className="absolute bottom-28 right-3 z-30 flex min-h-11 items-center gap-2 rounded-2xl border border-blue-100 bg-white/95 px-3.5 text-xs font-bold text-blue-600 shadow-lg backdrop-blur-md outline-none transition-colors duration-200 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-400 active:bg-blue-100"
+          title="当前位置"
+          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-blue-100 bg-white/95 text-blue-600 shadow-lg backdrop-blur-md outline-none transition-all hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-400 active:scale-95"
         >
-          <Crosshair size={17} />
-          <span>当前位置</span>
+          <Crosshair size={18} />
         </button>
-      )}
-
-      {/* 4.1 浏览器内全屏开关（固定在「当前位置」下方，全屏后仍可点击退出） */}
-      <MobileFullscreenToggle />
+      </div>
 
       {/* 5. Miniature Place Card (when place is selected) */}
       {selectedPlace && (

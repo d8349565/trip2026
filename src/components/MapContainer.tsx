@@ -65,6 +65,8 @@ interface MapContainerProps {
   searchSlot?: React.ReactNode;
   /** 搜索框内右侧的附加控件，移动端用于收纳地图筛选与更多操作。 */
   searchActions?: React.ReactNode;
+  /** 手机端地图页控制搜索栏的展开状态；未传入时保持原有默认显示。 */
+  mobileSearchExpanded?: boolean;
 }
 
 type AMapLngLat = { getLng: () => number; getLat: () => number };
@@ -200,6 +202,7 @@ export default function MapContainer({
   categoryLabels,
   searchSlot,
   searchActions,
+  mobileSearchExpanded = true,
 }: MapContainerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1063,11 +1066,12 @@ export default function MapContainer({
         </div>
       )}
 
+      {(mobileSearchExpanded || manualCreateMode) && (
       <div className={`absolute left-3 right-3 ${manualCreateMode ? 'top-20' : 'top-3'} z-40 max-w-md sm:right-16`} onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center rounded-2xl border border-white/50 bg-white/75 p-1 shadow-[0_2px_24px_-4px_rgba(0,0,0,0.10),0_0_0_1px_rgba(0,0,0,0.02)] backdrop-blur-xl">
           {searchMode === 'poi' ? <form onSubmit={searchPoi} className="flex min-w-0 flex-1 items-center gap-1">
             <Search size={15} className="ml-2.5 shrink-0 text-slate-300" />
-            <input ref={searchInputRef} data-testid="map-poi-search" value={keywords} onChange={(event) => setKeywords(event.target.value)} placeholder="搜索高德地点（新增或补充）" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-slate-300" />
+            <input ref={searchInputRef} data-testid="map-poi-search" value={keywords} onChange={(event) => setKeywords(event.target.value)} placeholder="搜索高德地点（新增或补充）" className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-slate-300 sm:text-[13px]" />
             <input value={region} onChange={(event) => setRegion(event.target.value)} placeholder="城市" className="hidden w-20 rounded-lg bg-slate-50 px-2 text-[11px] outline-none sm:block" />
             <button disabled={busy} className="rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm shadow-blue-500/25 disabled:opacity-50 active:scale-[0.97] transition-all">搜索</button>
           </form> : <form onSubmit={resolveShare} className="flex min-w-0 flex-1 items-center gap-1">
@@ -1089,6 +1093,7 @@ export default function MapContainer({
           </button>)}
         </div>}
       </div>
+      )}
 
       <div className="absolute right-3 top-3 z-30 flex flex-col gap-2 max-sm:hidden">
         <button onClick={() => mapRef.current?.setZoom(Math.min(20, (mapRef.current?.getZoom() ?? 12) + 1))} className="rounded-xl border bg-white p-2.5 text-slate-600 shadow-lg" title="放大"><Plus size={18} /></button>

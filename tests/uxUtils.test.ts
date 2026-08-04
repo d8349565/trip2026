@@ -83,7 +83,7 @@ test('place rating display tolerates null database values', () => {
   assert.equal(formatPlaceRating(4), '4.0');
 });
 
-test('mobile map puts filter and map actions inside the search toolbar', () => {
+test('mobile map groups four icon-only controls in the lower-right thumb zone', () => {
   const props = {
     places: [],
     media: [],
@@ -106,12 +106,18 @@ test('mobile map puts filter and map actions inside the search toolbar', () => {
   } as unknown as React.ComponentProps<typeof MobileMapPage>;
 
   const html = renderToStaticMarkup(React.createElement(MobileMapPage, props));
+  assert.match(html, /id="m_btn_open_search"/);
   assert.match(html, /id="m_btn_open_filter"/);
-  assert.match(html, /id="m_btn_open_actions"/);
+  assert.match(html, /id="m_btn_show_all"/);
+  assert.match(html, /id="m_btn_locate"/);
+  assert.match(html, /bottom-\[calc\(4\.75rem\+env\(safe-area-inset-bottom\)\)\]/);
+  assert.match(html, /aria-label="打开地图搜索"/);
   assert.match(html, /aria-label="打开地图筛选"/);
-  assert.match(html, /aria-label="打开地图操作"/);
+  assert.match(html, /aria-label="显示全部地点"/);
+  assert.match(html, /aria-label="定位到当前位置"/);
+  assert.doesNotMatch(html, /id="m_btn_open_actions"/);
+  assert.doesNotMatch(html, /id="m_btn_fullscreen"/);
   assert.doesNotMatch(html, /id="m_cat_all"/);
-  assert.doesNotMatch(html, /id="m_btn_show_all_places"/);
 });
 
 test('mobile bottom navigation keeps checklist reachable and moves profile out of the tab bar', () => {
