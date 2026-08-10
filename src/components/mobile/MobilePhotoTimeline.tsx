@@ -271,7 +271,8 @@ export default function MobilePhotoTimeline({
                             className="w-28 h-28 rounded-xl overflow-hidden shrink-0 bg-slate-100 border border-slate-100 snap-start active:scale-95 transition-transform cursor-pointer relative"
                           >
                             <img 
-                              src={photo.file_path} 
+                              src={photo.file_path}
+                              loading="lazy" 
                               alt="Timeline photo" 
                               className="w-full h-full object-cover"
                               referrerPolicy="no-referrer"
@@ -302,7 +303,8 @@ export default function MobilePhotoTimeline({
               className="relative rounded-2xl overflow-hidden aspect-square bg-slate-100 border border-slate-100 cursor-pointer active:scale-98 transition-transform"
             >
               <img 
-                src={photo.file_path} 
+                src={photo.file_path}
+                              loading="lazy" 
                 alt="Grid Photo" 
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"

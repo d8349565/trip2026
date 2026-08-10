@@ -18,12 +18,15 @@ import SettingsPanel from './components/SettingsPanel';
 
 // Mobile Remade Components
 import { useResponsive } from './hooks/useResponsive';
+import { useBackNavigationManager, useBackLayer } from './hooks/useMobileBackNavigation';
 import MobileBottomNav from './components/mobile/MobileBottomNav';
 import MobileCreateSheet from './components/mobile/MobileCreateSheet';
 import MobileProfilePage from './components/mobile/MobileProfilePage';
 import MobilePlaceMiniCard from './components/mobile/MobilePlaceMiniCard';
 import MobilePlaceDetailPage from './components/mobile/MobilePlaceDetailPage';
 import MobileMapPage from './components/mobile/MobileMapPage';
+import MobileFullscreenToggle from './components/mobile/MobileFullscreenToggle';
+import MobileInstallGuide from './components/mobile/MobileInstallGuide';
 import MobileTodayTripPage from './components/mobile/MobileTodayTripPage';
 import MobileTripOverviewPage from './components/mobile/MobileTripOverviewPage';
 import MobilePhotoTimeline from './components/mobile/MobilePhotoTimeline';
@@ -116,6 +119,9 @@ export default function App() {
   const [showQuickVisit, setShowQuickVisit] = useState(false);
   const [mobileAddPlaceToTripTarget, setMobileAddPlaceToTripTarget] = useState<Place | null>(null);
   const [mobileProfileSubPage, setMobileProfileSubPage] = useState<'visits' | 'favorites' | null>(null);
+
+  // 移动端返回键导航：系统返回逐层关闭弹层，而不是直接退出页面
+  const backNav = useBackNavigationManager(isMobile);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [viewMode, setViewMode] = useState<'map' | 'trip' | 'photos' | 'checklist' | 'guide' | 'settings'>('map');
@@ -263,6 +269,20 @@ export default function App() {
   const [inviteCode, setInviteCode] = useState('');
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [authError, setAuthError] = useState('');
+
+  // 注册返回键层级（顺序即视觉堆叠顺序，后注册的先被系统返回关闭）
+  useBackLayer(backNav, isMobile, 'tab', viewMode !== 'map', () => setViewMode('map'));
+  useBackLayer(backNav, isMobile, 'place-sheet', viewMode === 'map' && selectedPlace !== null, () => setSelectedPlace(null));
+  useBackLayer(backNav, isMobile, 'place-detail', mobileSelectedPlaceDetail !== null, () => setMobileSelectedPlaceDetail(null));
+  useBackLayer(backNav, isMobile, 'guide-detail', mobileSelectedGuide !== null, () => setMobileSelectedGuide(null));
+  useBackLayer(backNav, isMobile, 'photo-detail', mobileSelectedPhoto !== null, () => setMobileSelectedPhoto(null));
+  useBackLayer(backNav, isMobile, 'profile-subpage', mobileProfileSubPage !== null, () => setMobileProfileSubPage(null));
+  useBackLayer(backNav, isMobile, 'create-sheet', showMobileCreateSheet, () => setShowMobileCreateSheet(false));
+  useBackLayer(backNav, isMobile, 'trip-selector', showTripSelector, () => setShowTripSelector(false));
+  useBackLayer(backNav, isMobile, 'day-selector', showDaySelector, () => setShowDaySelector(false));
+  useBackLayer(backNav, isMobile, 'quick-visit', showQuickVisit, () => setShowQuickVisit(false));
+  useBackLayer(backNav, isMobile, 'add-to-trip', mobileAddPlaceToTripTarget !== null, () => setMobileAddPlaceToTripTarget(null));
+  useBackLayer(backNav, isMobile, 'login-modal', showLoginModal, () => setShowLoginModal(false));
 
   const notify = (message: string, tone: 'success' | 'error' | 'info' = 'info') => {
     setFeedback({ message, tone });
@@ -624,6 +644,8 @@ export default function App() {
       const updated = await api.updatePlace(placeId, { cover_image: photoUrl });
       setPlaces((current) => current.map((item) => item.id === placeId ? updated : item));
       if (selectedPlace?.id === placeId) setSelectedPlace(updated);
+      if (mobileSelectedPlaceDetail?.id === placeId) setMobileSelectedPlaceDetail(updated);
+      notify('已设为封面', 'success');
     } catch (e) {
       notify('设置封面失败，请重试。', 'error');
     }
@@ -814,6 +836,8 @@ export default function App() {
                 categoryLabels={CATEGORY_LABELS}
                 categoryIcons={CATEGORY_ICONS}
               />
+              <MobileFullscreenToggle />
+              <MobileInstallGuide />
             </div>
           )}
 
@@ -979,6 +1003,7 @@ export default function App() {
             categoryColors={CATEGORY_COLORS}
             categoryLabels={CATEGORY_LABELS}
             categoryIcons={CATEGORY_ICONS}
+            onSetCover={handleSetCover}
             onNavigateToTrip={() => {
               setViewMode('trip');
               setMobileTripTab('today');
@@ -995,6 +1020,7 @@ export default function App() {
             onClose={() => setMobileSelectedPhoto(null)}
             onDelete={handleDeleteMedia}
             onToggleFavorite={handleToggleFavoriteMedia}
+            onSetCover={handleSetCover}
           />
         )}
 

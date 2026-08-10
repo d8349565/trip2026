@@ -27,6 +27,7 @@ interface MobilePlaceDetailPageProps {
   categoryLabels: Record<PlaceCategory, string>;
   categoryIcons: Record<PlaceCategory, React.ReactNode>;
   onNavigateToTrip?: () => void;
+  onSetCover?: (placeId: string, photoUrl: string) => void;
 }
 
 export default function MobilePlaceDetailPage({
@@ -46,6 +47,7 @@ export default function MobilePlaceDetailPage({
   categoryLabels,
   categoryIcons,
   onNavigateToTrip = () => {},
+  onSetCover,
 }: MobilePlaceDetailPageProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'guide' | 'photos' | 'visit'>('overview');
   const [showAddTripModal, setShowAddTripModal] = useState(false);
@@ -538,13 +540,30 @@ export default function MobilePlaceDetailPage({
             <span className="text-[10px] font-bold text-white/50">
               {lightboxPhoto.captured_at ? lightboxPhoto.captured_at.substring(0, 10) : '近期上传'}
             </span>
-            <button
-              id="m_place_photo_lightbox_close"
-              onClick={() => setLightboxPhoto(null)}
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/40 text-white outline-none backdrop-blur-md transition-all active:scale-90"
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              {onSetCover && place.cover_image !== lightboxPhoto.file_path && (
+                <button
+                  id="m_place_photo_set_cover"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSetCover(place.id, lightboxPhoto.file_path);
+                    setLightboxPhoto(null);
+                    setFeedback('已设为封面');
+                  }}
+                  className="flex h-11 items-center gap-1 rounded-full bg-blue-600/80 px-3.5 text-[11px] font-bold text-white outline-none backdrop-blur-md transition-all active:scale-90"
+                >
+                  <ImageIcon size={14} />
+                  设为封面
+                </button>
+              )}
+              <button
+                id="m_place_photo_lightbox_close"
+                onClick={() => setLightboxPhoto(null)}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/40 text-white outline-none backdrop-blur-md transition-all active:scale-90"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
           <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
             <img

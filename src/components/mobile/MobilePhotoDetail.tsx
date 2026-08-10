@@ -1,6 +1,6 @@
 import React from 'react';
 import { Media, Place } from '../../types';
-import { ChevronLeft, Heart, Trash2, Calendar, MapPin, HardDrive } from 'lucide-react';
+import { ChevronLeft, Heart, Trash2, Calendar, MapPin, HardDrive, Image as ImageIcon } from 'lucide-react';
 
 interface MobilePhotoDetailProps {
   photo: Media;
@@ -8,6 +8,7 @@ interface MobilePhotoDetailProps {
   onClose: () => void;
   onDelete: (id: string) => void;
   onToggleFavorite: (id: string, fav: boolean) => void;
+  onSetCover?: (placeId: string, photoUrl: string) => void;
 }
 
 export default function MobilePhotoDetail({
@@ -16,6 +17,7 @@ export default function MobilePhotoDetail({
   onClose,
   onDelete,
   onToggleFavorite,
+  onSetCover,
 }: MobilePhotoDetailProps) {
   const associatedPlace = places.find(p => p.id === photo.place_id);
 
@@ -48,6 +50,17 @@ export default function MobilePhotoDetail({
         </button>
 
         <div className="flex gap-2">
+          {associatedPlace && onSetCover && associatedPlace.cover_image !== photo.file_path && (
+            <button
+              id="m_photo_detail_set_cover"
+              onClick={() => onSetCover(associatedPlace.id, photo.file_path)}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/40 text-white outline-none backdrop-blur-md active:scale-90"
+              title="设为地点封面"
+              aria-label="设为地点封面"
+            >
+              <ImageIcon size={18} />
+            </button>
+          )}
           <button
             id="m_photo_detail_fav"
             onClick={() => onToggleFavorite(photo.id, !photo.favorite)}

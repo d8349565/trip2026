@@ -265,6 +265,20 @@ function parseSharedMapPoint(value: string, sourceUrl: URL): SharedMapPoint | un
     [longitude, latitude] = position.split(',').map(Number);
   }
 
+  // 微信/QQ 内分享的高德短链（surl.amap.com）302 跳到 wb.amap.com/?q=lat,lng,name
+  const q = params.get('q');
+  if ((latitude === undefined || longitude === undefined) && q) {
+    const parts = q.split(',');
+    if (parts.length >= 2) {
+      const first = Number(parts[0]);
+      const second = Number(parts[1]);
+      if (Number.isFinite(first) && Number.isFinite(second)) {
+        // 高德 q 参数为 lat,lng[,name]；百度 q 一般为关键词文本，仅在两个都是数字时采用
+        [latitude, longitude] = [first, second];
+      }
+    }
+  }
+
   const location = params.get('location') ?? decoded.match(/[?&]location=([\d.-]+),([\d.-]+)/i)?.slice(1).join(',');
   if ((latitude === undefined || longitude === undefined) && location) {
     const [first, second] = location.split(',').map(Number);
@@ -281,9 +295,13 @@ function parseSharedMapPoint(value: string, sourceUrl: URL): SharedMapPoint | un
     || Math.abs(latitude!) > 90 || Math.abs(longitude!) > 180) return undefined;
 
   const converted = isBaidu ? bd09ToGcj02(latitude!, longitude!) : { latitude: latitude!, longitude: longitude! };
+  const qName = (() => {
+    const parts = params.get('q')?.split(',') ?? [];
+    return parts.length >= 3 ? parts.slice(2).join(',').trim() || undefined : undefined;
+  })();
   return {
     ...converted,
-    name: params.get('name') ?? params.get('title') ?? undefined,
+    name: params.get('name') ?? params.get('title') ?? qName ?? undefined,
     address: params.get('address') ?? params.get('content') ?? undefined,
     provider: isBaidu ? 'baidu' : 'amap',
   };

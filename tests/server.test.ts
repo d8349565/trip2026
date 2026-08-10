@@ -88,6 +88,19 @@ test('health, authentication, session rotation, and API guards work', async (con
   assert(Math.abs(baiduPoint.latitude - 39.907) < 0.02);
   assert(Math.abs(baiduPoint.longitude - 116.397) < 0.02);
 
+  // 微信里复制的高德分享：短链跳转到 wb.amap.com/?q=lat,lng,name
+  const wechatAmapShareResponse = await fetch(`${baseUrl}/api/map/share/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: loginCookie },
+    body: JSON.stringify({ url: '醴陵市袁溪谷(Y063东) 来自微信的地点 https://wb.amap.com/?q=27.918693496486295%2C113.54060456156729%2C%E9%86%B4%E9%99%B5%E5%B8%82%E8%A2%81%E6%BA%AA%E8%B0%B7' }),
+  });
+  assert.equal(wechatAmapShareResponse.status, 200);
+  const wechatAmapPoint = await wechatAmapShareResponse.json();
+  assert.equal(wechatAmapPoint.provider, 'amap');
+  assert.equal(wechatAmapPoint.name, '醴陵市袁溪谷');
+  assert(Math.abs(wechatAmapPoint.latitude - 27.91869) < 0.0001);
+  assert(Math.abs(wechatAmapPoint.longitude - 113.54060) < 0.0001);
+
   const privatePlaceResponse = await fetch(`${baseUrl}/api/places`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Cookie: loginCookie },
