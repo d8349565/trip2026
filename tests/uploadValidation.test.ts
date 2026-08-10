@@ -181,6 +181,18 @@ test('uploads enforce the image whitelist and cross-resource references', async 
   assert.equal(pngFile.status, 200);
   assert.equal(pngFile.headers.get('content-type'), 'image/png');
 
+  // 上传时应生成真实缩略图：用 sharp 生成一张真实 PNG，缩略图端点应返回重编码的 JPEG
+  const { default: sharp } = await import('sharp');
+  const realPng = await sharp({ create: { width: 800, height: 600, channels: 3, background: { r: 51, g: 102, b: 153 } } }).png().toBuffer();
+  const realPngResponse = await upload(adminCookie, {
+    filename: 'real-photo.png', dataUrl: dataUrl('image/png', realPng),
+  });
+  assert.equal(realPngResponse.status, 200);
+  const realPngMedia = await realPngResponse.json();
+  const realThumb = await fetch(`${baseUrl}${realPngMedia.thumbnail_path}`, { headers: { Cookie: adminCookie } });
+  assert.equal(realThumb.status, 200);
+  assert.equal(realThumb.headers.get('content-type'), 'image/jpeg');
+
   // HEIF is the standard MIME alias used by some Apple devices for HEIC containers.
   const heifResponse = await upload(adminCookie, {
     filename: 'iphone.heif', dataUrl: dataUrl('image/heif', HEIC),

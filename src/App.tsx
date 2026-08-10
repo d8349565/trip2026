@@ -41,6 +41,7 @@ import MobileAddPlaceToTripSheet from './components/mobile/MobileAddPlaceToTripS
 import MobileVisitListPage from './components/mobile/MobileVisitListPage';
 import FeedbackBanner from './components/FeedbackBanner';
 import { mergeVisitRatings } from './utils/placeRating';
+import { sortMediaByDateDesc } from './utils/mediaTimeline';
 
 // Icons
 import { 
@@ -1020,6 +1021,8 @@ export default function App() {
         {mobileSelectedPhoto && (
           <MobilePhotoDetail
             photo={mobileSelectedPhoto}
+            photos={sortMediaByDateDesc(media)}
+            onNavigate={setMobileSelectedPhoto}
             places={places}
             onClose={() => setMobileSelectedPhoto(null)}
             onDelete={handleDeleteMedia}

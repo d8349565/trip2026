@@ -10,6 +10,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import https from 'https';
 import argon2 from 'argon2';
+import sharp from 'sharp';
 import { z } from 'zod';
 import { fileURLToPath } from 'url';
 import type { Server } from 'node:http';
@@ -1289,11 +1290,52 @@ function serveMediaFile(req: express.Request, res: express.Response, kind: 'file
 }
 
 app.get('/api/media/:id/file', (req, res) => serveMediaFile(req, res, 'file'));
-app.get('/api/media/:id/thumbnail', (req, res) => serveMediaFile(req, res, 'thumbnail'));
+app.get('/api/media/:id/thumbnail', async (req, res) => {
+  // 旧数据的 thumbnail_path 指向原图；访问时若缩略图不存在则懒生成一次
+  const db = dbEngine.getRawDb();
+  const media = db.media.find((m) => m.id === req.params.id);
+  if (media && canRead(req, media)) {
+    await ensureThumbnail(media).catch(() => undefined);
+  }
+  return serveMediaFile(req, res, 'thumbnail');
+});
+
+/** 生成 640px 宽 JPEG 缩略图，返回 /uploads/ 相对路径；失败返回 null（回退原图）。 */
+async function generateThumbnail(sourceAbsolutePath: string, uploadsRelativePath: string): Promise<string | null> {
+  try {
+    const thumbRel = uploadsRelativePath.replace(/^(.*)\/([^/]+)$/, '$1/thumbs/$2').replace(/\.[^.]+$/, '.jpg');
+    const thumbAbs = path.join(UPLOADS_DIR, thumbRel);
+    fs.mkdirSync(path.dirname(thumbAbs), { recursive: true });
+    await sharp(sourceAbsolutePath)
+      .rotate() // 按 EXIF 方向矫正
+      .resize({ width: 640, withoutEnlargement: true })
+      .jpeg({ quality: 72, mozjpeg: true })
+      .toFile(thumbAbs);
+    return `/uploads/${thumbRel.replace(/\\/g, '/')}`;
+  } catch (error) {
+    console.error('THUMB_FAIL', error);
+    return null; // HEIC 等 sharp 不支持的格式：回退原图
+  }
+}
+
+/** 确保媒体记录有可用的缩略图文件；懒生成成功后回写数据库。 */
+async function ensureThumbnail(media: Media): Promise<void> {
+  if (!media.thumbnail_path || !media.thumbnail_path.startsWith('/uploads/')) return;
+  const uploadsRoot = path.resolve(UPLOADS_DIR);
+  const thumbAbs = path.resolve(uploadsRoot, media.thumbnail_path.slice('/uploads/'.length));
+  if (thumbAbs !== path.resolve(uploadsRoot, media.file_path.slice('/uploads/'.length)) && fs.existsSync(thumbAbs)) return;
+  if (!media.file_path.startsWith('/uploads/')) return;
+  const srcAbs = path.resolve(uploadsRoot, media.file_path.slice('/uploads/'.length));
+  if (!srcAbs.startsWith(uploadsRoot + path.sep) || !fs.existsSync(srcAbs)) return;
+  const generated = await generateThumbnail(srcAbs, media.file_path.slice('/uploads/'.length));
+  if (!generated) return;
+  media.thumbnail_path = generated;
+  dbEngine.saveDb(dbEngine.getRawDb());
+}
 
 // Since files are saved inside server, we can simulate an upload
 // by saving base64 string or handling mock uploads for our light private use.
-app.post('/api/media/upload', (req, res) => {
+app.post('/api/media/upload', async (req, res) => {
   const userId = getCurrentUserId(req);
   const db = dbEngine.getRawDb();
   const { filename, file_size, dataUrl, place_id, trip_id, captured_at } = req.body;
@@ -1353,12 +1395,15 @@ app.post('/api/media/upload', (req, res) => {
 
   fs.writeFileSync(targetPath, buffer);
 
+  // 生成真缩略图（640px JPEG）；不支持的格式回退为原图路径
+  const thumbnailRel = await generateThumbnail(targetPath, relativePath).catch(() => null);
+
   const mediaId = 'm_' + Math.random().toString(36).substring(2, 9);
   const newMedia: Media = {
     id: mediaId,
     user_id: userId,
     file_path: `/uploads/${relativePath.replace(/\\/g, '/')}`,
-    thumbnail_path: `/uploads/${relativePath.replace(/\\/g, '/')}`, // Simulated thumbnail
+    thumbnail_path: thumbnailRel ?? `/uploads/${relativePath.replace(/\\/g, '/')}`,
     file_hash: crypto.createHash('md5').update(buffer).digest('hex'),
     file_size: file_size || buffer.length,
     captured_at: captured_at || new Date().toISOString(),

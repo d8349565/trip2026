@@ -378,7 +378,7 @@ export default function MobilePlaceDetailPage({
                     onClick={() => setLightboxIndex(photoIndex)}
                   >
                     <img 
-                      src={photo.file_path} 
+                      src={photo.thumbnail_path || photo.file_path} 
                       alt="Place photo" 
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
