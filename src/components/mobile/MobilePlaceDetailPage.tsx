@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Place, PlaceCategory, Trip, TripDay, Media, Visit, Guide, type MediaUploadInput } from '../../types';
 import MobileAddPlaceToTripSheet from './MobileAddPlaceToTripSheet';
 import { photoLocationFields, preparePhotoForUpload } from '../../utils/photoUpload';
 import { formatPlaceRating } from '../../utils/placeRating';
 import { pickPlaceCover } from '../../utils/placeCover';
+import { BackNavContext, useBackLayer } from '../../hooks/useMobileBackNavigation';
 import { 
   Heart, Star, MapPin, X, ImageIcon, Clock, BookOpen, 
   DollarSign, Compass, Calendar, Check, User, Plus, 
-  Upload, Sparkles, Cloud, Users, ChevronLeft, ArrowLeft, Edit3
+  Upload, Sparkles, Cloud, Users, ChevronLeft, ArrowLeft, Edit3, Trash2
 } from 'lucide-react';
 
 interface MobilePlaceDetailPageProps {
@@ -28,6 +29,8 @@ interface MobilePlaceDetailPageProps {
   categoryIcons: Record<PlaceCategory, React.ReactNode>;
   onNavigateToTrip?: () => void;
   onSetCover?: (placeId: string, photoUrl: string) => void;
+  onDeletePhoto?: (id: string) => void;
+  onToggleFavoritePhoto?: (id: string, fav: boolean) => void;
 }
 
 export default function MobilePlaceDetailPage({
@@ -48,6 +51,8 @@ export default function MobilePlaceDetailPage({
   categoryIcons,
   onNavigateToTrip = () => {},
   onSetCover,
+  onDeletePhoto,
+  onToggleFavoritePhoto,
 }: MobilePlaceDetailPageProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'guide' | 'photos' | 'visit'>('overview');
   const [showAddTripModal, setShowAddTripModal] = useState(false);
@@ -60,7 +65,9 @@ export default function MobilePlaceDetailPage({
   // Photo state
   const [isUploading, setIsUploading] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const [lightboxPhoto, setLightboxPhoto] = useState<Media | null>(null);
+  // 照片查看器：当前照片下标（null = 关闭）。单击开关全景，左右滑动切换。
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Visit logging state
   const [showVisitForm, setShowVisitForm] = useState(false);
@@ -76,6 +83,31 @@ export default function MobilePlaceDetailPage({
   // Filter trips & media
   const filteredDays = tripDays.filter(d => d.trip_id === selectedTripId);
   const placePhotos = media.filter(m => m.place_id === place.id);
+
+  // 照片查看器纳入返回键层级：系统返回先关查看器，再关详情页
+  const backNav = React.useContext(BackNavContext);
+  useBackLayer(backNav, true, 'place-photo-viewer', lightboxIndex !== null, () => setLightboxIndex(null));
+
+  const lightboxPhoto = lightboxIndex !== null ? placePhotos[lightboxIndex] ?? null : null;
+  const stepLightbox = (delta: number) => {
+    setLightboxIndex((current) => {
+      if (current === null || placePhotos.length === 0) return current;
+      return Math.min(placePhotos.length - 1, Math.max(0, current + delta));
+    });
+  };
+  // 触摸结束：位移小视为单击（关闭全景），水平位移大视为滑动（切换上/下一张）
+  const handleViewerTouchEnd = (event: React.TouchEvent) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+    const dx = event.changedTouches[0].clientX - start.x;
+    const dy = event.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+      stepLightbox(dx < 0 ? 1 : -1);
+    } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      setLightboxIndex(null);
+    }
+  };
   // 有效封面：用户设置的 cover_image 优先，否则回退到最新关联照片（与 PC 端一致）
   const effectiveCover = pickPlaceCover(place, placePhotos);
   const placeVisits = visits.filter(v => v.place_id === place.id);
@@ -339,11 +371,11 @@ export default function MobilePlaceDetailPage({
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
-                {placePhotos.map(photo => (
+                {placePhotos.map((photo, photoIndex) => (
                   <div
                     key={photo.id}
                     className="relative rounded-xl overflow-hidden aspect-square bg-slate-100 shadow-xs group"
-                    onClick={() => setLightboxPhoto(photo)}
+                    onClick={() => setLightboxIndex(photoIndex)}
                   >
                     <img 
                       src={photo.file_path} 
@@ -530,24 +562,38 @@ export default function MobilePlaceDetailPage({
         </button>
       </div>
 
-      {/* Photo Lightbox */}
-      {lightboxPhoto && (
+      {/* Photo Viewer：单击关闭，左右滑动切换 */}
+      {lightboxPhoto && lightboxIndex !== null && (
         <div
           className="fixed inset-0 bg-slate-950 z-[60] flex flex-col animate-fade-in select-none"
-          onClick={() => setLightboxPhoto(null)}
+          onTouchStart={(e) => { touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+          onTouchEnd={handleViewerTouchEnd}
         >
-          <div className="px-4 py-4 flex items-center justify-between shrink-0">
+          <div
+            className="px-4 py-4 flex items-center justify-between shrink-0"
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
             <span className="text-[10px] font-bold text-white/50">
-              {lightboxPhoto.captured_at ? lightboxPhoto.captured_at.substring(0, 10) : '近期上传'}
+              {lightboxIndex + 1} / {placePhotos.length} · {lightboxPhoto.captured_at ? lightboxPhoto.captured_at.substring(0, 10) : '近期上传'}
             </span>
             <div className="flex items-center gap-2">
+              {onToggleFavoritePhoto && (
+                <button
+                  id="m_place_photo_fav"
+                  onClick={() => onToggleFavoritePhoto(lightboxPhoto.id, !lightboxPhoto.favorite)}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/40 text-white outline-none backdrop-blur-md transition-all active:scale-90"
+                  aria-label="收藏照片"
+                >
+                  <Heart size={18} className={lightboxPhoto.favorite ? 'fill-rose-500 text-rose-500' : ''} />
+                </button>
+              )}
               {onSetCover && place.cover_image !== lightboxPhoto.file_path && (
                 <button
                   id="m_place_photo_set_cover"
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  onClick={() => {
                     onSetCover(place.id, lightboxPhoto.file_path);
-                    setLightboxPhoto(null);
+                    setLightboxIndex(null);
                     setFeedback('已设为封面');
                   }}
                   className="flex h-11 items-center gap-1 rounded-full bg-blue-600/80 px-3.5 text-[11px] font-bold text-white outline-none backdrop-blur-md transition-all active:scale-90"
@@ -556,9 +602,24 @@ export default function MobilePlaceDetailPage({
                   设为封面
                 </button>
               )}
+              {onDeletePhoto && (
+                <button
+                  id="m_place_photo_delete"
+                  onClick={() => {
+                    if (confirm('确认永久删除这张照片吗？此操作不可撤销。')) {
+                      onDeletePhoto(lightboxPhoto.id);
+                      setLightboxIndex(null);
+                    }
+                  }}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/40 text-slate-300 outline-none backdrop-blur-md transition-all active:scale-90 hover:text-red-500"
+                  aria-label="删除照片"
+                >
+                  <Trash2 size={18} />
+                </button>
+              )}
               <button
                 id="m_place_photo_lightbox_close"
-                onClick={() => setLightboxPhoto(null)}
+                onClick={() => setLightboxIndex(null)}
                 className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/40 text-white outline-none backdrop-blur-md transition-all active:scale-90"
               >
                 <X size={20} />
@@ -567,12 +628,16 @@ export default function MobilePlaceDetailPage({
           </div>
           <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
             <img
+              key={lightboxPhoto.id}
               src={lightboxPhoto.file_path}
               alt="放大查看"
               className="max-h-full max-w-full object-contain rounded-lg shadow-2xl"
               referrerPolicy="no-referrer"
-              onClick={(e) => e.stopPropagation()}
+              draggable={false}
             />
+          </div>
+          <div className="shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-center text-[10px] font-bold text-white/30">
+            单击关闭 · 左右滑动切换
           </div>
         </div>
       )}

@@ -1,5 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import { BackLayerManager } from '../utils/backNavigation';
+
+/** 返回键管理器 Context：App 提供，各弹层组件（如照片灯箱）自行注册层级。 */
+export const BackNavContext = createContext<BackLayerManager | null>(null);
+
+export function useBackNavManager(): BackLayerManager | null {
+  return useContext(BackNavContext);
+}
 
 /**
  * 移动端返回键导航：
@@ -31,7 +38,7 @@ export function useBackNavigationManager(enabled: boolean): BackLayerManager {
  * isOpen 变为 true 时压入历史记录；关闭（UI 或系统返回）时自动出栈。
  */
 export function useBackLayer(
-  manager: BackLayerManager,
+  manager: BackLayerManager | null,
   enabled: boolean,
   key: string,
   isOpen: boolean,
@@ -41,7 +48,7 @@ export function useBackLayer(
   closeRef.current = close;
 
   useEffect(() => {
-    if (!enabled || !isOpen) return;
+    if (!manager || !enabled || !isOpen) return;
     return manager.push({ key, close: () => closeRef.current() });
   }, [manager, enabled, key, isOpen]);
 }

@@ -18,7 +18,7 @@ import SettingsPanel from './components/SettingsPanel';
 
 // Mobile Remade Components
 import { useResponsive } from './hooks/useResponsive';
-import { useBackNavigationManager, useBackLayer } from './hooks/useMobileBackNavigation';
+import { useBackNavigationManager, useBackLayer, BackNavContext } from './hooks/useMobileBackNavigation';
 import MobileBottomNav from './components/mobile/MobileBottomNav';
 import MobileCreateSheet from './components/mobile/MobileCreateSheet';
 import MobileProfilePage from './components/mobile/MobileProfilePage';
@@ -987,6 +987,7 @@ export default function App() {
         
         {/* Place details overlay */}
         {mobileSelectedPlaceDetail && (
+          <BackNavContext.Provider value={backNav}>
           <MobilePlaceDetailPage
             place={mobileSelectedPlaceDetail}
             trips={trips}
@@ -1004,12 +1005,15 @@ export default function App() {
             categoryLabels={CATEGORY_LABELS}
             categoryIcons={CATEGORY_ICONS}
             onSetCover={handleSetCover}
+            onDeletePhoto={handleDeleteMedia}
+            onToggleFavoritePhoto={handleToggleFavoriteMedia}
             onNavigateToTrip={() => {
               setViewMode('trip');
               setMobileTripTab('today');
               setMobileSelectedPlaceDetail(null);
             }}
           />
+          </BackNavContext.Provider>
         )}
 
         {/* Immersive Photo Viewer */}
