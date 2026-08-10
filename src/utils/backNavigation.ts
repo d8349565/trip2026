@@ -24,6 +24,11 @@ export class BackLayerManager {
 
   constructor(private readonly historyImpl: HistoryLike) {}
 
+  /** 激活时压入栈底哨兵（移动端启用返回键导航时调用一次）。 */
+  activate() {
+    this.pushSentinel();
+  }
+
   /** 模拟/接收浏览器 popstate（EventTarget 由 React 绑定层注入）。 */
   handlePopState = () => {
     if (this.expectProgrammaticBack) {
@@ -31,9 +36,24 @@ export class BackLayerManager {
       return;
     }
     const entry = this.stack.pop();
-    // 栈为空时不干预，浏览器正常后退（离开页面）
-    entry?.close();
+    if (entry) {
+      entry.close();
+      return;
+    }
+    // 栈已空：补一个哨兵状态，把用户留在应用内。
+    // 否则浏览器会继续后退——新标签页打开的场景退出去就是白屏，
+    // iOS 左缘右滑手势很容易误触发。
+    this.pushSentinel();
   };
+
+  /** 栈底哨兵：保证栈空时系统返回只是落在哨兵上，不会退出页面。 */
+  private pushSentinel() {
+    try {
+      this.historyImpl.pushState({ tfBase: true }, '');
+    } catch {
+      // pushState 不可用的环境直接跳过
+    }
+  }
 
   /** 打开弹层时入栈；返回的函数在弹层关闭/卸载时调用以出栈。 */
   push(entry: BackLayerEntry): () => void {

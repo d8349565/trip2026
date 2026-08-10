@@ -67,5 +67,19 @@ test('release 幂等且已被系统返回消费的条目不再触发 history.bac
 
   release(); // 组件随后卸载调用 release
   release(); // 幂等
-  assert.equal(history.states.length, 1); // 只 push 过一次，没有额外 back
+  assert.equal(history.states.length, 1); // 只 push 过一次；popstate 时栈非空，不补哨兵
+});
+
+test('栈空时系统返回补哨兵，用户留在应用内不退出页面', () => {
+  const history = createFakeHistory();
+  const manager = new BackLayerManager(history);
+  manager.activate(); // 启用时压入栈底哨兵
+  assert.equal(history.states.length, 1);
+
+  // 用户在根页面连按两次返回：第一次落到哨兵（栈空→补新哨兵），第二次同样被兜住
+  manager.handlePopState();
+  assert.equal(history.states.length, 2);
+  manager.handlePopState();
+  assert.equal(history.states.length, 3);
+  assert.deepEqual(history.states.at(-1), { tfBase: true });
 });

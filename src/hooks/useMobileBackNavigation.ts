@@ -23,6 +23,7 @@ export function useBackNavigationManager(enabled: boolean): BackLayerManager {
 
   useEffect(() => {
     if (!enabled) return;
+    manager.activate();
     window.addEventListener('popstate', manager.handlePopState);
     return () => {
       window.removeEventListener('popstate', manager.handlePopState);
