@@ -8,7 +8,7 @@ import { BackNavContext, useBackLayer } from '../../hooks/useMobileBackNavigatio
 import { 
   Heart, Star, MapPin, X, ImageIcon, Clock, BookOpen, 
   DollarSign, Compass, Calendar, Check, User, Plus, 
-  Upload, Sparkles, Cloud, Users, ChevronLeft, ArrowLeft, Edit3, Trash2
+  Upload, Sparkles, Cloud, Users, ChevronLeft, ChevronRight, ArrowLeft, Edit3, Trash2
 } from 'lucide-react';
 
 interface MobilePlaceDetailPageProps {
@@ -639,7 +639,7 @@ export default function MobilePlaceDetailPage({
               </button>
             </div>
           </div>
-          <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
+          <div className="flex-1 flex items-center justify-center p-2 overflow-hidden relative">
             <img
               key={lightboxPhoto.id}
               src={lightboxPhoto.file_path}
@@ -649,6 +649,31 @@ export default function MobilePlaceDetailPage({
               referrerPolicy="no-referrer"
               draggable={false}
             />
+            {/* 左右切换箭头：屏幕边缘的滑动会被浏览器返回手势劫持，点按最可靠 */}
+            {lightboxIndex > 0 && (
+              <button
+                type="button"
+                aria-label="上一张"
+                onClick={() => stepLightbox(-1)}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
+                className="absolute left-2 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/50 text-white backdrop-blur-md active:scale-90"
+              >
+                <ChevronLeft size={22} />
+              </button>
+            )}
+            {lightboxIndex < placePhotos.length - 1 && (
+              <button
+                type="button"
+                aria-label="下一张"
+                onClick={() => stepLightbox(1)}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/50 text-white backdrop-blur-md active:scale-90"
+              >
+                <ChevronRight size={22} />
+              </button>
+            )}
           </div>
           <div className="shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-center text-[10px] font-bold text-white/30">
             单击关闭 · 左右滑动切换

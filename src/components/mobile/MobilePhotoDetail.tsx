@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Media, Place } from '../../types';
-import { ChevronLeft, Heart, Trash2, Calendar, MapPin, HardDrive, Image as ImageIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Heart, Trash2, Calendar, MapPin, HardDrive, Image as ImageIcon } from 'lucide-react';
 
 interface MobilePhotoDetailProps {
   photo: Media;
@@ -126,7 +126,7 @@ export default function MobilePhotoDetail({
       </div>
 
       {/* 2. Main Expanded Photo Stage */}
-      <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
+      <div className="flex-1 flex items-center justify-center p-2 overflow-hidden relative">
         <img
           key={photo.id}
           src={photo.file_path}
@@ -136,6 +136,31 @@ export default function MobilePhotoDetail({
           referrerPolicy="no-referrer"
           draggable={false}
         />
+        {/* 左右切换箭头：屏幕边缘的滑动会被浏览器返回手势劫持，点按最可靠 */}
+        {canSwipe && currentIndex > 0 && (
+          <button
+            type="button"
+            aria-label="上一张"
+            onClick={() => step(-1)}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            className="absolute left-2 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/50 text-white backdrop-blur-md active:scale-90"
+          >
+            <ChevronLeft size={22} />
+          </button>
+        )}
+        {canSwipe && photos && currentIndex < photos.length - 1 && (
+          <button
+            type="button"
+            aria-label="下一张"
+            onClick={() => step(1)}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            className="absolute right-2 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/50 text-white backdrop-blur-md active:scale-90"
+          >
+            <ChevronRight size={22} />
+          </button>
+        )}
       </div>
 
       {/* 3. Bottom Information Panel */}
