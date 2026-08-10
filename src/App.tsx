@@ -378,12 +378,8 @@ export default function App() {
     return true;
   });
 
+  // 只把当前筛选结果收入视野，不清除筛选条件（移动端反馈后统一的行为）
   const handleShowAllPlaces = () => {
-    setSelectedCategory('');
-    setSearchQuery('');
-    setShowFavoritesOnly(false);
-    setDifficultyFilter('');
-    setIsWetFilter(false);
     setSelectedPlace(null);
     setMapFitRequest((request) => request + 1);
   };

@@ -101,9 +101,8 @@ export default function MobileMapPage({
     setRecommendedOnly(false);
   };
 
+  // 只把当前筛选结果收入视野，不清除筛选条件（用户明确要求保留筛选状态）
   const showAllPlaces = () => {
-    setSearchQuery('');
-    resetFilters();
     onSelectPlace(null);
     setFitAllRequest((request) => request + 1);
   };
