@@ -68,6 +68,14 @@ export default function MobilePlaceDetailPage({
   // 照片查看器：当前照片下标（null = 关闭）。单击开关全景，左右滑动切换。
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  // 滑动方向（用于切换过渡动画）
+  const [slideDir, setSlideDir] = useState<1 | -1>(1);
+  // 防误触：查看器刚关闭时，同一个 tap 的 click 事件会穿透到下层照片网格导致重开
+  const lastViewerCloseAtRef = useRef(0);
+  const closeLightbox = () => {
+    lastViewerCloseAtRef.current = Date.now();
+    setLightboxIndex(null);
+  };
 
   // Visit logging state
   const [showVisitForm, setShowVisitForm] = useState(false);
@@ -90,6 +98,7 @@ export default function MobilePlaceDetailPage({
 
   const lightboxPhoto = lightboxIndex !== null ? placePhotos[lightboxIndex] ?? null : null;
   const stepLightbox = (delta: number) => {
+    setSlideDir(delta > 0 ? 1 : -1);
     setLightboxIndex((current) => {
       if (current === null || placePhotos.length === 0) return current;
       return Math.min(placePhotos.length - 1, Math.max(0, current + delta));
@@ -105,7 +114,7 @@ export default function MobilePlaceDetailPage({
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
       stepLightbox(dx < 0 ? 1 : -1);
     } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-      setLightboxIndex(null);
+      closeLightbox();
     }
   };
   // 有效封面：用户设置的 cover_image 优先，否则回退到最新关联照片（与 PC 端一致）
@@ -375,7 +384,11 @@ export default function MobilePlaceDetailPage({
                   <div
                     key={photo.id}
                     className="relative rounded-xl overflow-hidden aspect-square bg-slate-100 shadow-xs group"
-                    onClick={() => setLightboxIndex(photoIndex)}
+                    onClick={() => {
+                      // 查看器刚关闭时穿透下来的 click 不响应，防止误重开
+                      if (Date.now() - lastViewerCloseAtRef.current < 400) return;
+                      setLightboxIndex(photoIndex);
+                    }}
                   >
                     <img 
                       src={photo.thumbnail_path || photo.file_path} 
@@ -593,7 +606,7 @@ export default function MobilePlaceDetailPage({
                   id="m_place_photo_set_cover"
                   onClick={() => {
                     onSetCover(place.id, lightboxPhoto.file_path);
-                    setLightboxIndex(null);
+                    closeLightbox();
                     setFeedback('已设为封面');
                   }}
                   className="flex h-11 items-center gap-1 rounded-full bg-blue-600/80 px-3.5 text-[11px] font-bold text-white outline-none backdrop-blur-md transition-all active:scale-90"
@@ -608,7 +621,7 @@ export default function MobilePlaceDetailPage({
                   onClick={() => {
                     if (confirm('确认永久删除这张照片吗？此操作不可撤销。')) {
                       onDeletePhoto(lightboxPhoto.id);
-                      setLightboxIndex(null);
+                      closeLightbox();
                     }
                   }}
                   className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/40 text-slate-300 outline-none backdrop-blur-md transition-all active:scale-90 hover:text-red-500"
@@ -619,7 +632,7 @@ export default function MobilePlaceDetailPage({
               )}
               <button
                 id="m_place_photo_lightbox_close"
-                onClick={() => setLightboxIndex(null)}
+                onClick={closeLightbox}
                 className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900/40 text-white outline-none backdrop-blur-md transition-all active:scale-90"
               >
                 <X size={20} />
@@ -631,7 +644,8 @@ export default function MobilePlaceDetailPage({
               key={lightboxPhoto.id}
               src={lightboxPhoto.file_path}
               alt="放大查看"
-              className="max-h-full max-w-full object-contain rounded-lg shadow-2xl"
+              className="max-h-full max-w-full object-contain rounded-lg shadow-2xl animate-viewer-slide-in"
+              style={{ '--slide-from': `${slideDir * 48}px` } as React.CSSProperties}
               referrerPolicy="no-referrer"
               draggable={false}
             />

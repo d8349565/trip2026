@@ -205,3 +205,13 @@
 .animate-slide-in-right {
   animation: tf-slide-in-right 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* 照片查看器滑动切换过渡：方向由 --slide-from 控制 */
+@keyframes tf-viewer-slide-in {
+  from { opacity: 0.25; transform: translateX(var(--slide-from, 0px)) scale(0.98); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.animate-viewer-slide-in {
+  animation: tf-viewer-slide-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

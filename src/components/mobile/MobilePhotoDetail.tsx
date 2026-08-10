@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Media, Place } from '../../types';
 import { ChevronLeft, Heart, Trash2, Calendar, MapPin, HardDrive, Image as ImageIcon } from 'lucide-react';
 
@@ -25,6 +25,7 @@ export default function MobilePhotoDetail({
   onSetCover,
 }: MobilePhotoDetailProps) {
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [slideDir, setSlideDir] = useState<1 | -1>(1);
   const associatedPlace = places.find(p => p.id === photo.place_id);
 
   const currentIndex = photos ? photos.findIndex(p => p.id === photo.id) : -1;
@@ -33,7 +34,10 @@ export default function MobilePhotoDetail({
   const step = (delta: number) => {
     if (!canSwipe || !photos || !onNavigate) return;
     const next = Math.min(photos.length - 1, Math.max(0, currentIndex + delta));
-    if (next !== currentIndex) onNavigate(photos[next]);
+    if (next !== currentIndex) {
+      setSlideDir(delta > 0 ? 1 : -1);
+      onNavigate(photos[next]);
+    }
   };
 
   // 触摸结束：位移小视为单击（关闭），水平位移大视为滑动切换
@@ -127,7 +131,8 @@ export default function MobilePhotoDetail({
           key={photo.id}
           src={photo.file_path}
           alt="Expanded view"
-          className="max-h-full max-w-full object-contain rounded-lg shadow-2xl"
+          className="max-h-full max-w-full object-contain rounded-lg shadow-2xl animate-viewer-slide-in"
+          style={{ '--slide-from': `${slideDir * 48}px` } as React.CSSProperties}
           referrerPolicy="no-referrer"
           draggable={false}
         />

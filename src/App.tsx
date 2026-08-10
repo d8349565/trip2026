@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapLocation, Place, PlaceCategory, Trip, TripDay, TripItem, Guide, Checklist, ChecklistItem, Media, User, InviteCode, Visit, type MediaUploadInput } from './types';
 import { api } from './api';
 
@@ -101,6 +101,8 @@ export default function App() {
   
   // Mobile Detailed Overlay States
   const [mobileSelectedPhoto, setMobileSelectedPhoto] = useState<Media | null>(null);
+  // 防误触：全局照片查看器刚关闭时，穿透到下层网格的 click 不应重开
+  const lastPhotoViewerCloseAtRef = useRef(0);
   const [mobileSelectedGuide, setMobileSelectedGuide] = useState<Guide | null>(null);
   const [mobileSelectedPlaceDetail, setMobileSelectedPlaceDetail] = useState<Place | null>(null);
   const [mobileTripTab, setMobileTripTab] = useState<'today' | 'manage' | 'guides'>('today');
@@ -928,7 +930,11 @@ export default function App() {
               onUploadPhoto={handleUploadMedia}
               onDeletePhoto={handleDeleteMedia}
               onToggleFavorite={handleToggleFavoriteMedia}
-              onSelectPhoto={(photo) => setMobileSelectedPhoto(photo)}
+              onSelectPhoto={(photo) => {
+                // 查看器刚关闭时穿透下来的 click 不响应，防止误重开
+                if (Date.now() - lastPhotoViewerCloseAtRef.current < 400) return;
+                setMobileSelectedPhoto(photo);
+              }}
               onCreatePlaceFromPhoto={handleCreatePlaceFromPhoto}
               onLinkPhotoToPlace={handleLinkPhotoToPlace}
             />
@@ -1024,7 +1030,10 @@ export default function App() {
             photos={sortMediaByDateDesc(media)}
             onNavigate={setMobileSelectedPhoto}
             places={places}
-            onClose={() => setMobileSelectedPhoto(null)}
+            onClose={() => {
+              lastPhotoViewerCloseAtRef.current = Date.now();
+              setMobileSelectedPhoto(null);
+            }}
             onDelete={handleDeleteMedia}
             onToggleFavorite={handleToggleFavoriteMedia}
             onSetCover={handleSetCover}
