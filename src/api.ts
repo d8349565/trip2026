@@ -49,56 +49,52 @@ export class ApiError extends Error {
   }
 }
 
+async function responseError(response: Response): Promise<ApiError> {
+  const body = await response.json().catch(() => undefined) as {
+    error?: string | { code?: string; message?: string; details?: unknown };
+  } | undefined;
+  const error = body?.error;
+  if (error && typeof error === 'object') {
+    return new ApiError(error.message || 'Request failed', response.status, error.code, error.details);
+  }
+  return new ApiError(typeof error === 'string' ? error : 'Request failed', response.status);
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${url}`, init);
-  if (!response.ok) {
-    const body = await response.json().catch(() => undefined) as {
-      error?: string | { code?: string; message?: string; details?: unknown };
-    } | undefined;
-    const error = body?.error;
-    if (error && typeof error === 'object') {
-      throw new ApiError(error.message || 'Request failed', response.status, error.code, error.details);
-    }
-    throw new ApiError(typeof error === 'string' ? error : 'Request failed', response.status);
-  }
+  if (!response.ok) throw await responseError(response);
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+async function requestOk(url: string, init?: RequestInit): Promise<boolean> {
+  const response = await fetch(`${API_BASE}${url}`, init);
+  if (!response.ok) throw await responseError(response);
+  return true;
 }
 
 export const api = {
   // Auth
   getCurrentUser: async (userId?: string): Promise<{ user: User }> => {
-    const res = await fetch(`${API_BASE}/api/me`, {
+    return request('/api/me', {
       headers: userId ? { 'x-user-id': userId } : {}
     });
-    if (!res.ok) throw new Error('Not authenticated');
-    return res.json();
   },
 
   login: async (username: string, password: string): Promise<{ user: User }> => {
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
+    return request('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || '登录失败');
-    }
-    return res.json();
   },
 
   registerByInvite: async (username: string, password: string, inviteCode: string): Promise<{ user: User }> => {
-    const res = await fetch(`${API_BASE}/api/auth/register-by-invite`, {
+    return request('/api/auth/register-by-invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password, inviteCode })
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || '注册失败');
-    }
-    return res.json();
   },
 
   // Formal cookie-session auth. The legacy methods above remain temporarily
@@ -186,12 +182,11 @@ export const api = {
     if (filters.search) params.append('search', filters.search);
     if (filters.favorite) params.append('favorite', 'true');
     
-    const res = await fetch(`${API_BASE}/api/places?${params.toString()}`);
-    return res.json();
+    return request(`/api/places?${params.toString()}`);
   },
 
   createPlace: async (place: Partial<Place>, userId?: string): Promise<Place> => {
-    const res = await fetch(`${API_BASE}/api/places`, {
+    return request('/api/places', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -199,54 +194,35 @@ export const api = {
       },
       body: JSON.stringify(place)
     });
-    if (!res.ok) throw new Error('Failed to create place');
-    return res.json();
   },
 
   updatePlace: async (id: string, place: Partial<Place>): Promise<Place> => {
-    const res = await fetch(`${API_BASE}/api/places/${id}`, {
+    return request(`/api/places/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(place)
     });
-    if (!res.ok) throw new Error('Failed to update place');
-    return res.json();
   },
 
-  deletePlace: async (id: string): Promise<boolean> => {
-    const res = await fetch(`${API_BASE}/api/places/${id}`, {
-      method: 'DELETE'
-    });
-    return res.ok;
-  },
+  deletePlace: async (id: string): Promise<boolean> => requestOk(`/api/places/${id}`, { method: 'DELETE' }),
 
-  toggleFavorite: async (id: string): Promise<Place> => {
-    const res = await fetch(`${API_BASE}/api/places/${id}/favorite`, { method: 'POST' });
-    return res.json();
-  },
+  toggleFavorite: async (id: string): Promise<Place> => request(`/api/places/${id}/favorite`, { method: 'POST' }),
 
-  toggleVisited: async (id: string): Promise<Place> => {
-    const res = await fetch(`${API_BASE}/api/places/${id}/mark-visited`, { method: 'POST' });
-    return res.json();
-  },
+  toggleVisited: async (id: string): Promise<Place> => request(`/api/places/${id}/mark-visited`, { method: 'POST' }),
 
   addToTrip: async (placeId: string, data: { trip_day_id: string; type?: string; start_time?: string; note?: string }): Promise<any> => {
-    const res = await fetch(`${API_BASE}/api/places/${placeId}/add-to-trip`, {
+    return request(`/api/places/${placeId}/add-to-trip`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
   // Trips
-  getTrips: async (): Promise<Trip[]> => {
-    const res = await fetch(`${API_BASE}/api/trips`);
-    return res.json();
-  },
+  getTrips: async (): Promise<Trip[]> => request('/api/trips'),
 
   createTrip: async (trip: Partial<Trip>, userId?: string): Promise<Trip> => {
-    const res = await fetch(`${API_BASE}/api/trips`, {
+    return request('/api/trips', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -254,14 +230,9 @@ export const api = {
       },
       body: JSON.stringify(trip)
     });
-    return res.json();
   },
 
-  getTripDetails: async (id: string): Promise<Trip & { days: any[]; items: any[] }> => {
-    const res = await fetch(`${API_BASE}/api/trips/${id}`);
-    if (!res.ok) throw new Error('Trip not found');
-    return res.json();
-  },
+  getTripDetails: async (id: string): Promise<Trip & { days: any[]; items: any[] }> => request(`/api/trips/${id}`),
 
   getTripDetailsBatch: async (ids: string[]): Promise<Array<Trip & { days: any[]; items: any[] }>> => {
     if (ids.length === 0) return [];
@@ -274,71 +245,57 @@ export const api = {
   },
 
   updateTrip: async (id: string, data: Partial<Trip>): Promise<Trip> => {
-    const res = await fetch(`${API_BASE}/api/trips/${id}`, {
+    return request(`/api/trips/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
-  deleteTrip: async (id: string): Promise<boolean> => {
-    const res = await fetch(`${API_BASE}/api/trips/${id}`, { method: 'DELETE' });
-    return res.ok;
-  },
+  deleteTrip: async (id: string): Promise<boolean> => requestOk(`/api/trips/${id}`, { method: 'DELETE' }),
 
   updateTripDay: async (dayId: string, data: any): Promise<any> => {
-    const res = await fetch(`${API_BASE}/api/trip-days/${dayId}`, {
+    return request(`/api/trip-days/${dayId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
   createTripItem: async (dayId: string, data: any): Promise<any> => {
-    const res = await fetch(`${API_BASE}/api/trip-days/${dayId}/items`, {
+    return request(`/api/trip-days/${dayId}/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
   updateTripItem: async (itemId: string, data: any): Promise<any> => {
-    const res = await fetch(`${API_BASE}/api/trip-items/${itemId}`, {
+    return request(`/api/trip-items/${itemId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
-  deleteTripItem: async (itemId: string): Promise<boolean> => {
-    const res = await fetch(`${API_BASE}/api/trip-items/${itemId}`, { method: 'DELETE' });
-    return res.ok;
-  },
+  deleteTripItem: async (itemId: string): Promise<boolean> => requestOk(`/api/trip-items/${itemId}`, { method: 'DELETE' }),
 
-  reorderTripItems: async (items: { id: string; sort_order: number; trip_day_id?: string }[]): Promise<boolean> => {
-    const res = await fetch(`${API_BASE}/api/trip-items/reorder`, {
+  reorderTripItems: async (items: { id: string; sort_order: number; trip_day_id?: string }[]): Promise<boolean> => requestOk('/api/trip-items/reorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items })
-    });
-    return res.ok;
-  },
+    }),
 
   // Media
   getMedia: async (params: { place_id?: string; trip_id?: string } = {}): Promise<Media[]> => {
     const q = new URLSearchParams();
     if (params.place_id) q.append('place_id', params.place_id);
     if (params.trip_id) q.append('trip_id', params.trip_id);
-    const res = await fetch(`${API_BASE}/api/media?${q.toString()}`);
-    return res.json();
+    return request(`/api/media?${q.toString()}`);
   },
 
   probePhotoMetadata: async (file: File): Promise<PhotoMetadataProbeResult> => {
-    const res = await fetch(`${API_BASE}/api/media/metadata`, {
+    return request('/api/media/metadata', {
       method: 'POST',
       headers: {
         'Content-Type': file.type || 'application/octet-stream',
@@ -346,14 +303,10 @@ export const api = {
       },
       body: file,
     });
-    if (!res.ok) {
-      throw new ApiError('照片元数据服务端解析失败', res.status);
-    }
-    return res.json();
   },
 
   uploadMedia: async (data: MediaUploadInput, userId?: string): Promise<Media> => {
-    const res = await fetch(`${API_BASE}/api/media/upload`, {
+    return request('/api/media/upload', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -361,42 +314,22 @@ export const api = {
       },
       body: JSON.stringify(data)
     });
-    if (!res.ok) {
-      let message = '上传失败';
-      try {
-        const body = await res.json();
-        if (typeof body?.error?.message === 'string') message = body.error.message;
-        else if (typeof body?.error === 'string') message = body.error;
-      } catch { /* keep the generic message */ }
-      throw new Error(message);
-    }
-    return res.json();
   },
 
-  deleteMedia: async (id: string): Promise<boolean> => {
-    const res = await fetch(`${API_BASE}/api/media/${id}`, { method: 'DELETE' });
-    return res.ok;
-  },
+  deleteMedia: async (id: string): Promise<boolean> => requestOk(`/api/media/${id}`, { method: 'DELETE' }),
 
   updateMedia: async (id: string, data: any): Promise<any> => {
-    const res = await fetch(`${API_BASE}/api/media/${id}`, {
+    return request(`/api/media/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
   // Checklists
-  getChecklists: async (): Promise<Checklist[]> => {
-    const res = await fetch(`${API_BASE}/api/checklists`);
-    return res.json();
-  },
+  getChecklists: async (): Promise<Checklist[]> => request('/api/checklists'),
 
-  getChecklistDetails: async (id: string): Promise<Checklist & { items: any[] }> => {
-    const res = await fetch(`${API_BASE}/api/checklists/${id}`);
-    return res.json();
-  },
+  getChecklistDetails: async (id: string): Promise<Checklist & { items: any[] }> => request(`/api/checklists/${id}`),
 
   getChecklistDetailsBatch: async (ids: string[]): Promise<Array<Checklist & { items: any[] }>> => {
     if (ids.length === 0) return [];
@@ -409,7 +342,7 @@ export const api = {
   },
 
   createChecklist: async (data: { title: string; trip_id?: string; template_type?: string }, userId?: string): Promise<Checklist> => {
-    const res = await fetch(`${API_BASE}/api/checklists`, {
+    return request('/api/checklists', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -417,11 +350,10 @@ export const api = {
       },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
   createChecklistFromTemplate: async (data: { title: string; trip_id?: string; template_type: string }, userId?: string): Promise<Checklist & { items: any[] }> => {
-    const res = await fetch(`${API_BASE}/api/checklists/from-template`, {
+    return request('/api/checklists/from-template', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -429,45 +361,33 @@ export const api = {
       },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
   createChecklistItem: async (checklistId: string, data: any): Promise<any> => {
-    const res = await fetch(`${API_BASE}/api/checklists/${checklistId}/items`, {
+    return request(`/api/checklists/${checklistId}/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
   updateChecklistItem: async (itemId: string, data: any): Promise<any> => {
-    const res = await fetch(`${API_BASE}/api/checklist-items/${itemId}`, {
+    return request(`/api/checklist-items/${itemId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
-  deleteChecklistItem: async (itemId: string): Promise<boolean> => {
-    const res = await fetch(`${API_BASE}/api/checklist-items/${itemId}`, { method: 'DELETE' });
-    return res.ok;
-  },
+  deleteChecklistItem: async (itemId: string): Promise<boolean> => requestOk(`/api/checklist-items/${itemId}`, { method: 'DELETE' }),
 
   // Guides
-  getGuides: async (): Promise<Guide[]> => {
-    const res = await fetch(`${API_BASE}/api/guides`);
-    return res.json();
-  },
+  getGuides: async (): Promise<Guide[]> => request('/api/guides'),
 
-  getGuideDetails: async (id: string): Promise<Guide> => {
-    const res = await fetch(`${API_BASE}/api/guides/${id}`);
-    return res.json();
-  },
+  getGuideDetails: async (id: string): Promise<Guide> => request(`/api/guides/${id}`),
 
   createGuide: async (data: Partial<Guide>, userId?: string): Promise<Guide> => {
-    const res = await fetch(`${API_BASE}/api/guides`, {
+    return request('/api/guides', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -475,79 +395,47 @@ export const api = {
       },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
   updateGuide: async (id: string, data: Partial<Guide>): Promise<Guide> => {
-    const res = await fetch(`${API_BASE}/api/guides/${id}`, {
+    return request(`/api/guides/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    return res.json();
   },
 
-  deleteGuide: async (id: string): Promise<boolean> => {
-    const res = await fetch(`${API_BASE}/api/guides/${id}`, { method: 'DELETE' });
-    return res.ok;
-  },
+  deleteGuide: async (id: string): Promise<boolean> => requestOk(`/api/guides/${id}`, { method: 'DELETE' }),
 
   // Visits
-  getVisits: async (): Promise<any[]> => {
-    const res = await fetch(`${API_BASE}/api/visits`);
-    return res.json();
-  },
+  getVisits: async (): Promise<any[]> => request('/api/visits'),
 
   createVisit: async (data: any): Promise<any> => {
-    const res = await fetch(`${API_BASE}/api/visits`, {
+    return request('/api/visits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => null) as { error?: { message?: string } | string } | null;
-      const message = typeof body?.error === 'string'
-        ? body.error
-        : body?.error?.message || 'Failed to create visit';
-      throw new Error(message);
-    }
-    return res.json();
   },
 
   // System & Admin
-  getBackups: async (): Promise<any[]> => {
-    const res = await fetch(`${API_BASE}/api/backups`);
-    return res.json();
-  },
+  getBackups: async (): Promise<any[]> => request('/api/backups'),
 
-  createBackup: async (): Promise<any> => {
-    const res = await fetch(`${API_BASE}/api/backups`, { method: 'POST' });
-    return res.json();
-  },
+  createBackup: async (): Promise<any> => request('/api/backups', { method: 'POST' }),
 
   restoreBackup: async (filename: string): Promise<any> => {
-    const res = await fetch(`${API_BASE}/api/backups/restore`, {
+    return request('/api/backups/restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filename })
     });
-    return res.json();
   },
 
-  deleteBackup: async (filename: string): Promise<boolean> => {
-    const res = await fetch(`${API_BASE}/api/backups/${filename}`, { method: 'DELETE' });
-    return res.ok;
-  },
+  deleteBackup: async (filename: string): Promise<boolean> => requestOk(`/api/backups/${filename}`, { method: 'DELETE' }),
 
-  getCapacity: async (): Promise<any> => {
-    const res = await fetch(`${API_BASE}/api/system/capacity`);
-    return res.json();
-  },
+  getCapacity: async (): Promise<any> => request('/api/system/capacity'),
 
-  getInvites: async (): Promise<InviteCode[]> => {
-    const res = await fetch(`${API_BASE}/api/admin/invites`);
-    return res.json();
-  },
+  getInvites: async (): Promise<InviteCode[]> => request('/api/admin/invites'),
 
   getAdminUsers: async (): Promise<User[]> => {
     return request<User[]>('/api/admin/users');
@@ -578,7 +466,7 @@ export const api = {
   },
 
   createInvite: async (data: any, userId?: string): Promise<InviteCode> => {
-    const res = await fetch(`${API_BASE}/api/admin/invites`, {
+    return request('/api/admin/invites', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -586,6 +474,5 @@ export const api = {
       },
       body: JSON.stringify(data)
     });
-    return res.json();
   }
 };
