@@ -14,7 +14,13 @@ import {
 import { wgs84ToGcj02 } from '../utils/coords';
 import { confirmedPhotoLocationFields } from '../utils/photoUpload';
 import { clusterPlaces, selectClusterRepresentative, summarizePlaceMedia } from '../utils/mapClusters';
-import { resolveMapFocus, shouldFitAllPlacesInitially, computeFitView } from '../utils/mapViewport';
+import {
+  computeFitView,
+  getPlaceBounds,
+  getFitViewPadding,
+  resolveMapFocus,
+  shouldFitAllPlacesInitially,
+} from '../utils/mapViewport';
 import type { MapLocation, Place, PlaceCategory, Media, MediaUploadInput } from '../types';
 
 /** 一张「本地已处理、尚未落库」的照片，等待用户在地图上确认位置与归属后一并保存。 */
@@ -77,6 +83,7 @@ type AMapLngLat = { getLng: () => number; getLat: () => number };
 type AMapEvent = { lnglat?: AMapLngLat };
 type AMapMarker = { on: (event: string, handler: (event: AMapEvent) => void) => void };
 type AMapFeature = 'bg' | 'point' | 'road' | 'building';
+type AMapBounds = unknown;
 type AMapInstance = {
   add: (overlay: unknown | unknown[]) => void;
   remove: (overlay: unknown | unknown[]) => void;
@@ -85,6 +92,11 @@ type AMapInstance = {
   setZoom: (zoom: number) => void;
   setZoomAndCenter: (zoom: number, center: [number, number], immediately?: boolean) => void;
   setCenter: (center: [number, number]) => void;
+  getFitZoomAndCenterByBounds: (
+    bounds: AMapBounds,
+    avoid?: [number, number, number, number],
+    maxZoom?: number,
+  ) => [number, AMapLngLat];
   setFitView: (
     overlays?: unknown[],
     immediately?: boolean,
@@ -98,6 +110,7 @@ type AMapInstance = {
 type AMapGlobal = {
   Map: new (container: HTMLDivElement, options: Record<string, unknown>) => AMapInstance;
   Marker: new (options: Record<string, unknown>) => AMapMarker;
+  Bounds: new (southWest: [number, number], northEast: [number, number]) => AMapBounds;
 };
 
 // 标准底图保留河流、溪流等水系的清晰对比，便于溯溪地点选点和浏览。
@@ -272,14 +285,16 @@ export default function MapContainer({
 
   const fitAllPlaces = () => {
     const map = mapRef.current;
-    if (!map || markersRef.current.length === 0) return;
+    const AMap = window.AMap;
+    const bounds = getPlaceBounds(places);
+    if (!map || !AMap || !bounds) return;
     const mobile = (rootRef.current?.clientWidth ?? 0) < 640;
-    map.setFitView(
-      markersRef.current,
-      false,
-      mobile ? [150, 36, 120, 36] : [72, 72, 72, 72],
+    const [zoom, center] = map.getFitZoomAndCenterByBounds(
+      new AMap.Bounds(bounds.southWest, bounds.northEast),
+      getFitViewPadding(mobile),
       15,
     );
+    map.setZoomAndCenter(zoom, [center.getLng(), center.getLat()]);
   };
 
   const requestFitAllPlaces = () => {
@@ -665,26 +680,7 @@ export default function MapContainer({
 
   useEffect(() => {
     if (!ready || fitAllRequest <= 0) return;
-    let frame = 0;
-    let attempts = 0;
-    let retryTimers: number[] = [];
-    const fitWhenMarkersReady = () => {
-      if (markersRef.current.length > 0) {
-        fitAllPlaces();
-        retryTimers = [250, 700, 1200].map((delay) => window.setTimeout(() => {
-          if (markersRef.current.length > 0) fitAllPlaces();
-        }, delay));
-        return;
-      }
-      if (attempts >= 30) return;
-      attempts += 1;
-      frame = requestAnimationFrame(fitWhenMarkersReady);
-    };
-    frame = requestAnimationFrame(fitWhenMarkersReady);
-    return () => {
-      cancelAnimationFrame(frame);
-      retryTimers.forEach((timer) => window.clearTimeout(timer));
-    };
+    fitAllPlaces();
   }, [fitAllRequest, places.length, ready]);
 
   useEffect(() => {

@@ -8,6 +8,30 @@ export interface ResolvedMapFocus {
   longitude: number;
 }
 
+export function getFitViewPadding(mobile: boolean): [number, number, number, number] {
+  return mobile ? [168, 48, 136, 48] : [72, 72, 72, 72];
+}
+
+export function getPlaceBounds(
+  places: Array<{ latitude: number; longitude: number }>,
+): { southWest: [number, number]; northEast: [number, number] } | undefined {
+  const valid = places.filter(
+    (place) => Number.isFinite(place.latitude) && Number.isFinite(place.longitude),
+  );
+  if (valid.length === 0) return undefined;
+
+  return {
+    southWest: [
+      Math.min(...valid.map((place) => place.longitude)),
+      Math.min(...valid.map((place) => place.latitude)),
+    ],
+    northEast: [
+      Math.max(...valid.map((place) => place.longitude)),
+      Math.max(...valid.map((place) => place.latitude)),
+    ],
+  };
+}
+
 /**
  * 返回第一个有效的高优先级地图焦点。
  *
