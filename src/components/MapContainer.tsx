@@ -15,8 +15,8 @@ import { wgs84ToGcj02 } from '../utils/coords';
 import { confirmedPhotoLocationFields } from '../utils/photoUpload';
 import { clusterPlaces, selectClusterRepresentative, summarizePlaceMedia } from '../utils/mapClusters';
 import {
+  computeBoundsFitView,
   computeFitView,
-  getPlaceBounds,
   getFitViewPadding,
   resolveMapFocus,
   shouldFitAllPlacesInitially,
@@ -83,7 +83,6 @@ type AMapLngLat = { getLng: () => number; getLat: () => number };
 type AMapEvent = { lnglat?: AMapLngLat };
 type AMapMarker = { on: (event: string, handler: (event: AMapEvent) => void) => void };
 type AMapFeature = 'bg' | 'point' | 'road' | 'building';
-type AMapBounds = unknown;
 type AMapInstance = {
   add: (overlay: unknown | unknown[]) => void;
   remove: (overlay: unknown | unknown[]) => void;
@@ -92,11 +91,6 @@ type AMapInstance = {
   setZoom: (zoom: number) => void;
   setZoomAndCenter: (zoom: number, center: [number, number], immediately?: boolean) => void;
   setCenter: (center: [number, number]) => void;
-  getFitZoomAndCenterByBounds: (
-    bounds: AMapBounds,
-    avoid?: [number, number, number, number],
-    maxZoom?: number,
-  ) => [number, AMapLngLat];
   setFitView: (
     overlays?: unknown[],
     immediately?: boolean,
@@ -110,7 +104,6 @@ type AMapInstance = {
 type AMapGlobal = {
   Map: new (container: HTMLDivElement, options: Record<string, unknown>) => AMapInstance;
   Marker: new (options: Record<string, unknown>) => AMapMarker;
-  Bounds: new (southWest: [number, number], northEast: [number, number]) => AMapBounds;
 };
 
 // 标准底图保留河流、溪流等水系的清晰对比，便于溯溪地点选点和浏览。
@@ -284,17 +277,20 @@ export default function MapContainer({
   const isPhotoPosition = !!photoDraft || !!photoUpload || !!photoMode || uploadModeActive;
 
   const fitAllPlaces = () => {
+    // 纯 Mercator 数学自算中心+zoom：AMap 的 getFitZoomAndCenterByBounds 真机不应用 avoid 边距，
+    // 导致标记贴边/被裁。自算参数完全可控，见 tests/mapViewport.test.ts。
     const map = mapRef.current;
-    const AMap = window.AMap;
-    const bounds = getPlaceBounds(places);
-    if (!map || !AMap || !bounds) return;
-    const mobile = (rootRef.current?.clientWidth ?? 0) < 640;
-    const [zoom, center] = map.getFitZoomAndCenterByBounds(
-      new AMap.Bounds(bounds.southWest, bounds.northEast),
+    const container = rootRef.current;
+    if (!map || !container) return;
+    const mobile = container.clientWidth < 640;
+    const fit = computeBoundsFitView(
+      places,
+      container.clientWidth,
+      container.clientHeight,
       getFitViewPadding(mobile),
-      15,
     );
-    map.setZoomAndCenter(zoom, [center.getLng(), center.getLat()]);
+    if (!fit) return;
+    map.setZoomAndCenter(fit.zoom, fit.center);
   };
 
   const requestFitAllPlaces = () => {

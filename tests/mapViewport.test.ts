@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { clusterPlaces } from '../src/utils/mapClusters';
 import {
+  computeBoundsFitView,
   getPlaceBounds,
   getFitViewPadding,
   resolveMapFocus,
@@ -65,7 +66,57 @@ test('显示全部使用真实地点边界，不受低缩放聚合中心影响',
   });
 });
 
-test('手机端显示全部比原视野多留少量边距', () => {
-  assert.deepEqual(getFitViewPadding(true), [168, 48, 136, 48]);
-  assert.deepEqual(getFitViewPadding(false), [72, 72, 72, 72]);
+test('手机端显示全部边距避开顶部浮钮与右侧控件列', () => {
+  const mobile = getFitViewPadding(true);
+  const desktop = getFitViewPadding(false);
+  assert.equal(mobile.top > mobile.bottom, true);
+  assert.equal(mobile.right > mobile.left, true);
+  assert.deepEqual(desktop, { top: 72, right: 72, bottom: 72, left: 72 });
+});
+
+// 线上 15 个真实地点坐标（2026-08-15 飞雨截图回归用例）
+const realPlaces = [
+  [28.730798, 113.840859], [28.637672, 114.006959], [28.583554, 113.903528],
+  [28.530732, 113.192302], [28.45776, 114.015366], [28.457672, 113.936896],
+  [28.430676, 114.165507], [28.421686, 114.08911], [28.420393, 114.140828],
+  [28.406377, 113.59331], [28.396564, 114.048054], [28.343692, 113.684229],
+  [28.012648, 113.092092], [27.918007, 113.538865], [27.613036, 114.031192],
+].map(([latitude, longitude], index) => place(`real-${index}`, latitude, longitude));
+
+function project(latitude: number, longitude: number, zoom: number, center: [number, number], width: number, height: number) {
+  const scale = 256 * 2 ** zoom;
+  const toX = (lng: number) => ((lng + 180) / 360) * scale;
+  const toY = (lat: number) => {
+    const sin = Math.max(-0.9999, Math.min(0.9999, Math.sin((lat * Math.PI) / 180)));
+    return (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * scale;
+  };
+  return {
+    x: toX(longitude) - toX(center[0]) + width / 2,
+    y: toY(latitude) - toY(center[1]) + height / 2,
+  };
+}
+
+test('显示全部：真实地点全部落入内边距盒，不再贴边被裁', () => {
+  const width = 390;
+  const height = 844;
+  const padding = getFitViewPadding(true);
+  const fit = computeBoundsFitView(realPlaces, width, height, padding);
+
+  assert.ok(fit);
+  assert.ok(fit!.zoom >= 3 && fit!.zoom <= 15);
+  assert.ok(Number.isInteger(fit!.zoom * 2));
+
+  for (const p of realPlaces) {
+    const { x, y } = project(p.latitude, p.longitude, fit!.zoom, fit!.center, width, height);
+    assert.ok(x >= padding.left && x <= width - padding.right, `lng 越界: ${x}`);
+    assert.ok(y >= padding.top && y <= height - padding.bottom, `lat 越界: ${y}`);
+  }
+});
+
+test('显示全部：单点时回退合理 zoom 且中心即该点', () => {
+  const fit = computeBoundsFitView([place('only', 28.2, 113.5)], 390, 844, getFitViewPadding(true));
+  assert.ok(fit);
+  assert.equal(fit!.zoom, 15);
+  assert.ok(Math.abs(fit!.center[0] - 113.5) < 0.01);
+  assert.ok(Math.abs(fit!.center[1] - 28.2) < 0.01);
 });
