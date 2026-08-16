@@ -25,7 +25,6 @@ import MobileProfilePage from './components/mobile/MobileProfilePage';
 import MobilePlaceMiniCard from './components/mobile/MobilePlaceMiniCard';
 import MobilePlaceDetailPage from './components/mobile/MobilePlaceDetailPage';
 import MobileMapPage from './components/mobile/MobileMapPage';
-import MobileFullscreenToggle from './components/mobile/MobileFullscreenToggle';
 import MobileInstallGuide from './components/mobile/MobileInstallGuide';
 import MobileTodayTripPage from './components/mobile/MobileTodayTripPage';
 import MobileTripOverviewPage from './components/mobile/MobileTripOverviewPage';
@@ -128,6 +127,8 @@ export default function App() {
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [viewMode, setViewMode] = useState<'map' | 'trip' | 'photos' | 'checklist' | 'guide' | 'settings'>('map');
+  // 手机端地图页沉浸模式：隐藏底栏与浮动控件，地图全屏浏览
+  const [mobileImmersive, setMobileImmersive] = useState(false);
 
   const openMobileCreateTrip = () => {
     setViewMode('trip');
@@ -831,11 +832,12 @@ export default function App() {
                 }}
                 onOpenProfile={() => setViewMode('settings')}
                 profileLabel={currentUser?.username ?? ''}
+                immersive={mobileImmersive}
+                onImmersiveChange={(next) => setMobileImmersive(next)}
                 categoryColors={CATEGORY_COLORS}
                 categoryLabels={CATEGORY_LABELS}
                 categoryIcons={CATEGORY_ICONS}
               />
-              <MobileFullscreenToggle />
               <MobileInstallGuide />
             </div>
           )}
@@ -974,8 +976,8 @@ export default function App() {
           )}
         </div>
 
-        {/* 3. Mobile Bottom Navigation Bar (Fixed bottom) */}
-        <div className="fixed bottom-0 inset-x-0 z-40">
+        {/* 3. Mobile Bottom Navigation Bar (Fixed bottom); 沉浸模式隐藏底栏让地图全屏 */}
+        <div className={`fixed bottom-0 inset-x-0 z-40 transition-transform duration-300 ${mobileImmersive && viewMode === 'map' ? 'pointer-events-none translate-y-full opacity-0' : 'opacity-100'}`}>
           <MobileBottomNav
             currentView={viewMode === 'settings' ? 'map' : viewMode}
             onViewChange={(tab) => {

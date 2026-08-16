@@ -68,6 +68,8 @@ interface MapContainerProps {
   fitAllRequest?: number;
   /** 点击“显示全部地点”时由外层重置筛选条件。 */
   onShowAllPlaces?: () => void;
+  /** 地图拖动/缩放状态回调：interacting=true 期间外层可隐藏浮动控件，避免按钮挡标记。 */
+  onInteractingChange?: (interacting: boolean) => void;
   categoryColors: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }>;
   categoryLabels: Record<PlaceCategory, string>;
   categoryIcons: Record<PlaceCategory, React.ReactNode>;
@@ -209,6 +211,7 @@ export default function MapContainer({
   onLocationChange,
   fitAllRequest = 0,
   onShowAllPlaces,
+  onInteractingChange,
   categoryLabels,
   searchSlot,
   searchActions,
@@ -218,6 +221,9 @@ export default function MapContainer({
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<AMapInstance | undefined>(undefined);
+  // 地图初始化时注册的事件闭包需要拿到最新的回调，用 ref 镜像避免 stale closure
+  const interactingCallbackRef = useRef(onInteractingChange);
+  useEffect(() => { interactingCallbackRef.current = onInteractingChange; });
   const markersRef = useRef<unknown[]>([]);
   const markerElementsRef = useRef<HTMLElement[]>([]);
   const draftMarkerRef = useRef<unknown | undefined>(undefined);
@@ -424,6 +430,7 @@ export default function MapContainer({
       mapRef.current = map;
       setMapZoom(map.getZoom());
       map.on('zoomend', () => {
+        interactingCallbackRef.current?.(false);
         const zoom = map.getZoom();
         setMapZoom(zoom);
         map.setFeatures(getMapFeatures(zoom));
@@ -440,13 +447,20 @@ export default function MapContainer({
         if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = undefined; }
       };
       map.on('zoomstart', () => {
+        interactingCallbackRef.current?.(true);
         clearLongPress();
         for (const element of markerElementsRef.current) {
           element.style.opacity = '0';
           element.style.pointerEvents = 'none';
         }
       });
-      map.on('movestart', clearLongPress);
+      map.on('movestart', () => {
+        clearLongPress();
+        interactingCallbackRef.current?.(true);
+      });
+      map.on('moveend', () => {
+        interactingCallbackRef.current?.(false);
+      });
       // 移动端长按创建标记（600ms，移动超 10px 取消）
       if (isTouchDevice && containerRef.current) {
         const el = containerRef.current;
@@ -1065,7 +1079,7 @@ export default function MapContainer({
       {error && <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-50 px-6 text-center"><p className="font-bold text-red-600">{error}</p><p className="mt-2 text-xs text-slate-500">请检查 Key 类型、安全密钥和域名配置。</p></div>}
 
       {manualCreateMode && !draft && (
-        <div className="absolute left-3 right-3 top-3 z-50 flex items-start gap-3 rounded-2xl border border-blue-200 bg-white/95 px-3.5 py-3 shadow-lg backdrop-blur-md sm:left-1/2 sm:right-auto sm:w-[min(420px,calc(100%-1.5rem))] sm:-translate-x-1/2">
+        <div className="absolute left-3 right-3 top-3 z-50 flex items-start gap-3 rounded-2xl border border-blue-200 bg-white/95 px-3.5 py-3 shadow-lg backdrop-blur-md max-sm:top-16 sm:left-1/2 sm:right-auto sm:w-[min(420px,calc(100%-1.5rem))] sm:-translate-x-1/2">
           <MapPin size={16} className="mt-0.5 shrink-0 text-blue-600" />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-extrabold text-slate-800">正在新增地点</p>
@@ -1076,7 +1090,7 @@ export default function MapContainer({
       )}
 
       {(mobileSearchExpanded || manualCreateMode) && (
-      <div className={`absolute left-3 right-3 ${manualCreateMode ? 'top-20' : 'top-3'} z-40 max-w-md sm:right-16`} onClick={(event) => event.stopPropagation()}>
+      <div className={`absolute left-3 right-3 ${manualCreateMode ? 'top-20 max-sm:top-[9.25rem]' : 'top-3 max-sm:top-16'} z-40 max-w-md sm:right-16`} onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center rounded-2xl border border-white/50 bg-white/75 p-1 shadow-[0_2px_24px_-4px_rgba(0,0,0,0.10),0_0_0_1px_rgba(0,0,0,0.02)] backdrop-blur-xl">
           {searchMode === 'poi' ? <form onSubmit={searchPoi} className="flex min-w-0 flex-1 items-center gap-1">
             <Search size={15} className="ml-2.5 shrink-0 text-slate-300" />

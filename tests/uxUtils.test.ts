@@ -83,7 +83,7 @@ test('place rating display tolerates null database values', () => {
   assert.equal(formatPlaceRating(4), '4.0');
 });
 
-test('mobile map groups four icon-only controls in the lower-right thumb zone', () => {
+test('mobile map moves search/filter/profile to a top bar and keeps three thumb-zone controls', () => {
   const props = {
     places: [],
     media: [],
@@ -100,24 +100,70 @@ test('mobile map groups four icon-only controls in the lower-right thumb zone', 
     onPhotoDraftEnd: () => {},
     onToggleFavorite: () => {},
     onAddToTrip: () => {},
+    onOpenProfile: () => {},
+    profileLabel: '',
+    immersive: false,
+    onImmersiveChange: () => {},
     categoryColors: {},
     categoryLabels: {},
     categoryIcons: {},
   } as unknown as React.ComponentProps<typeof MobileMapPage>;
 
   const html = renderToStaticMarkup(React.createElement(MobileMapPage, props));
+  // 顶部操作栏：搜索/筛选/我的
   assert.match(html, /id="m_btn_open_search"/);
   assert.match(html, /id="m_btn_open_filter"/);
+  assert.match(html, /id="m_btn_open_profile"/);
+  // 拇指区：沉浸/显示全部/定位
+  assert.match(html, /id="m_btn_immersive"/);
   assert.match(html, /id="m_btn_show_all"/);
   assert.match(html, /id="m_btn_locate"/);
   assert.match(html, /bottom-\[calc\(4\.75rem\+env\(safe-area-inset-bottom\)\)\]/);
   assert.match(html, /aria-label="打开地图搜索"/);
   assert.match(html, /aria-label="打开地图筛选"/);
+  assert.match(html, /aria-label="进入沉浸"/);
   assert.match(html, /aria-label="显示全部地点"/);
   assert.match(html, /aria-label="定位到当前位置"/);
   assert.doesNotMatch(html, /id="m_btn_open_actions"/);
   assert.doesNotMatch(html, /id="m_btn_fullscreen"/);
   assert.doesNotMatch(html, /id="m_cat_all"/);
+  // 非沉浸态不应出现退出胶囊
+  assert.doesNotMatch(html, /退出沉浸/);
+});
+
+test('mobile map immersive mode hides top bar and shows an exit capsule', () => {
+  const props = {
+    places: [],
+    media: [],
+    selectedPlace: null,
+    onSelectPlace: () => {},
+    onViewPlaceDetails: () => {},
+    onCreatePlace: async () => ({}) as Place,
+    onUpdatePlace: async () => ({}) as Place,
+    onDeletePlace: async () => {},
+    onRequestEditor: () => {},
+    editorRequest: 0,
+    editRequest: null,
+    photoDraft: null,
+    onPhotoDraftEnd: () => {},
+    onToggleFavorite: () => {},
+    onAddToTrip: () => {},
+    onOpenProfile: () => {},
+    profileLabel: '',
+    immersive: true,
+    onImmersiveChange: () => {},
+    categoryColors: {},
+    categoryLabels: {},
+    categoryIcons: {},
+  } as unknown as React.ComponentProps<typeof MobileMapPage>;
+
+  const html = renderToStaticMarkup(React.createElement(MobileMapPage, props));
+  // 沉浸态：退出胶囊常驻，顶栏按钮隐藏，退出沉浸按钮 aria
+  assert.match(html, /退出沉浸/);
+  assert.doesNotMatch(html, /id="m_btn_open_search"/);
+  assert.doesNotMatch(html, /id="m_btn_open_filter"/);
+  assert.doesNotMatch(html, /id="m_btn_open_profile"/);
+  assert.match(html, /aria-label="退出沉浸"/);
 });
 
 test('mobile bottom navigation keeps checklist reachable and moves profile out of the tab bar', () => {

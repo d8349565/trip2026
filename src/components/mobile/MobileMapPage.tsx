@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { MapLocation, Media, Place, PlaceCategory } from '../../types';
 import MapContainer from '../MapContainer';
 import MobilePlaceMiniCard from './MobilePlaceMiniCard';
 import { pickPlaceCover } from '../../utils/placeCover';
-import { MapPin, X, Heart, Sparkles, LayoutList, Crosshair, LocateFixed, Search, SlidersHorizontal, UserRound } from 'lucide-react';
+import { MapPin, X, Heart, Sparkles, LayoutList, Crosshair, Expand, LocateFixed, Search, Shrink, SlidersHorizontal, UserRound } from 'lucide-react';
 
 interface MobileMapPageProps {
   places: Place[];
@@ -23,6 +23,8 @@ interface MobileMapPageProps {
   onAddToTrip: (placeId: string) => void;
   onOpenProfile: () => void;
   profileLabel: string;
+  immersive: boolean;
+  onImmersiveChange: (immersive: boolean) => void;
   onLocationChange?: (location: MapLocation) => void;
   categoryColors: Record<PlaceCategory, { bg: string; text: string; iconBg: string; border: string }>;
   categoryLabels: Record<PlaceCategory, string>;
@@ -47,6 +49,8 @@ export default function MobileMapPage({
   onAddToTrip,
   onOpenProfile,
   profileLabel,
+  immersive,
+  onImmersiveChange,
   onLocationChange,
   categoryColors,
   categoryLabels,
@@ -107,6 +111,26 @@ export default function MobileMapPage({
     setFitAllRequest((request) => request + 1);
   };
 
+  // 拖动/缩放地图时暂时隐藏浮动控件，松手 600ms 后恢复，避免浏览地图时按钮挡标记
+  const [controlsHidden, setControlsHidden] = useState(false);
+  const showControlsTimerRef = useRef<number | undefined>(undefined);
+  const handleMapInteracting = (interacting: boolean) => {
+    if (interacting) {
+      if (showControlsTimerRef.current) {
+        window.clearTimeout(showControlsTimerRef.current);
+        showControlsTimerRef.current = undefined;
+      }
+      setControlsHidden(true);
+      return;
+    }
+    if (showControlsTimerRef.current) return;
+    showControlsTimerRef.current = window.setTimeout(() => {
+      showControlsTimerRef.current = undefined;
+      setControlsHidden(false);
+    }, 600);
+  };
+  const controlsAutoHide = controlsHidden ? 'pointer-events-none opacity-0' : 'opacity-100';
+
 
   return (
     <div className="flex-1 h-full w-full relative flex flex-col overflow-hidden select-none">
@@ -129,6 +153,7 @@ export default function MobileMapPage({
           onLocationChange={onLocationChange}
           fitAllRequest={fitAllRequest}
           onShowAllPlaces={showAllPlaces}
+          onInteractingChange={handleMapInteracting}
           categoryColors={categoryColors}
           categoryLabels={categoryLabels}
           categoryIcons={categoryIcons}
@@ -136,45 +161,67 @@ export default function MobileMapPage({
         />
       </div>
 
-      <button
-        id="m_btn_open_profile"
-        type="button"
-        onClick={onOpenProfile}
-        aria-label="打开我的"
-        className="absolute right-3 top-16 z-30 flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-100 bg-white/95 text-sm font-black text-blue-600 shadow-lg backdrop-blur-md outline-none transition-transform active:scale-95"
-      >
-        {profileLabel ? <span aria-hidden="true">{profileLabel.slice(0, 1).toUpperCase()}</span> : <UserRound size={18} />}
-      </button>
+      {/* 4. 顶部操作栏：搜索/筛选/我的 移到这里，释放右侧，减少对地图标记的遮挡 */}
+      {!immersive && (
+        <div className={`pointer-events-none absolute left-3 right-3 top-3 z-30 flex items-center gap-2 transition-opacity duration-300 sm:hidden ${controlsAutoHide}`}>
+          <button
+            id="m_btn_open_search"
+            type="button"
+            onClick={() => setShowMapSearch((open) => !open)}
+            aria-expanded={showMapSearch}
+            aria-label={showMapSearch ? '收起地图搜索' : '打开地图搜索'}
+            title={showMapSearch ? '收起搜索' : '搜索地点'}
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-100 bg-white/95 text-slate-600 shadow-lg backdrop-blur-md outline-none transition-all hover:bg-slate-50 active:scale-95 ${controlsHidden ? '' : 'pointer-events-auto'}`}
+          >
+            {showMapSearch ? <X size={18} /> : <Search size={18} />}
+          </button>
+          <button
+            id="m_btn_open_filter"
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={showFilterSheet}
+            onClick={() => setShowFilterSheet(true)}
+            aria-label="打开地图筛选"
+            title="筛选地点"
+            className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border shadow-lg backdrop-blur-md outline-none transition-all hover:bg-blue-50 active:scale-95 ${controlsHidden ? '' : 'pointer-events-auto'} ${
+              hasActiveFilters
+                ? 'border-blue-500 bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-blue-500/25'
+                : 'border-slate-100 bg-white/95 text-slate-600'
+            }`}
+          >
+            <SlidersHorizontal size={18} />
+            {hasActiveFilters && <span aria-label="已启用筛选" className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-white" />}
+          </button>
+          <div className="min-w-0 flex-1" />
+          <button
+            id="m_btn_open_profile"
+            type="button"
+            onClick={onOpenProfile}
+            aria-label="打开我的"
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-100 bg-white/95 text-sm font-black text-blue-600 shadow-lg backdrop-blur-md outline-none transition-transform active:scale-95 ${controlsHidden ? '' : 'pointer-events-auto'}`}
+          >
+            {profileLabel ? <span aria-hidden="true">{profileLabel.slice(0, 1).toUpperCase()}</span> : <UserRound size={18} />}
+          </button>
+        </div>
+      )}
 
-      {/* 4. 手机端地图工具集中在拇指区；仅保留搜索、筛选、显示全部与定位。 */}
-      <div className="absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-3 z-30 flex flex-col gap-2">
+      {/* 5. 拇指区：只留 沉浸/显示全部/定位 三个；非沉浸态拖图时自动隐藏 */}
+      <div
+        className={`absolute right-3 z-30 flex flex-col gap-2 transition-opacity duration-300 ${
+          immersive
+            ? 'bottom-[calc(0.75rem+env(safe-area-inset-bottom))]'
+            : 'bottom-[calc(4.75rem+env(safe-area-inset-bottom))]'
+        } ${immersive ? '' : controlsAutoHide}`}
+      >
         <button
-          id="m_btn_open_search"
+          id="m_btn_immersive"
           type="button"
-          onClick={() => setShowMapSearch((open) => !open)}
-          aria-expanded={showMapSearch}
-          aria-label={showMapSearch ? '收起地图搜索' : '打开地图搜索'}
-          title={showMapSearch ? '收起搜索' : '搜索地点'}
+          onClick={() => onImmersiveChange(!immersive)}
+          aria-label={immersive ? '退出沉浸' : '进入沉浸'}
+          title={immersive ? '退出沉浸' : '进入沉浸'}
           className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-100 bg-white/95 text-slate-600 shadow-lg backdrop-blur-md outline-none transition-all hover:bg-slate-50 active:scale-95"
         >
-          {showMapSearch ? <X size={18} /> : <Search size={18} />}
-        </button>
-        <button
-          id="m_btn_open_filter"
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={showFilterSheet}
-          onClick={() => setShowFilterSheet(true)}
-          aria-label="打开地图筛选"
-          title="筛选地点"
-          className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border shadow-lg backdrop-blur-md outline-none transition-all hover:bg-blue-50 active:scale-95 ${
-            hasActiveFilters
-              ? 'border-blue-500 bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-blue-500/25'
-              : 'border-slate-100 bg-white/95 text-slate-600'
-          }`}
-        >
-          <SlidersHorizontal size={18} />
-          {hasActiveFilters && <span aria-label="已启用筛选" className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-white" />}
+          {immersive ? <Shrink size={18} /> : <Expand size={18} />}
         </button>
         <button
           id="m_btn_show_all"
@@ -197,6 +244,18 @@ export default function MobileMapPage({
           <Crosshair size={18} />
         </button>
       </div>
+
+      {/* 沉浸退出胶囊：底部居中常驻，随时点按退出 */}
+      {immersive && (
+        <button
+          type="button"
+          onClick={() => onImmersiveChange(false)}
+          aria-label="退出沉浸"
+          className="absolute bottom-[calc(0.625rem+env(safe-area-inset-bottom))] left-1/2 z-30 -translate-x-1/2 rounded-full border border-slate-200/70 bg-white/85 px-4 py-1.5 text-[10px] font-bold text-slate-500 shadow-lg backdrop-blur-md outline-none active:scale-95"
+        >
+          退出沉浸
+        </button>
+      )}
 
       {/* 5. Miniature Place Card (when place is selected) */}
       {selectedPlace && (
