@@ -2,8 +2,10 @@ import React from 'react';
 import { Trip, TripDay, TripItem, Place } from '../../types';
 import { 
   Calendar, CheckCircle, Circle, MapPin, Clock, Navigation, 
-  Check, ArrowRight, ShieldAlert, Sparkles, ChevronDown, HelpCircle 
+  Check, ArrowRight, ShieldAlert, Sparkles, ChevronDown, HelpCircle,
+  Rocket
 } from 'lucide-react';
+import TripDayMap from './TripDayMap';
 
 interface MobileTodayTripPageProps {
   activeTrip: Trip | null;
@@ -73,10 +75,35 @@ export default function MobileTodayTripPage({
     return places.find(p => p.id === placeId) || null;
   };
 
+  // 距出发天数提示
+  const todayStr = new Date().toISOString().split('T')[0];
+  const daysUntilStart = Math.ceil((new Date(activeTrip.start_date).getTime() - new Date(todayStr).getTime()) / (1000 * 60 * 60 * 24));
+  const isUpcoming = daysUntilStart > 0;
+  const isOngoing = todayStr >= activeTrip.start_date && todayStr <= activeTrip.end_date;
+
   return (
     <div className="space-y-4 select-none font-sans">
       
-      {/* 0. Trip & Day Quick-Selector Bar */}
+      {/* 0. 出发倒计时提示 */}
+      {isUpcoming && (
+        <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50/50 px-3.5 py-2.5">
+          <Rocket size={14} className="text-blue-600 shrink-0" />
+          <p className="text-xs font-bold text-blue-700">
+            距出发还有 <span className="text-sm font-black">{daysUntilStart}</span> 天
+          </p>
+        </div>
+      )}
+      {isOngoing && (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3.5 py-2.5">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+          </span>
+          <p className="text-xs font-bold text-emerald-700">行程进行中</p>
+        </div>
+      )}
+      
+      {/* 1. Trip & Day Quick-Selector Bar */}
       <div className="grid grid-cols-2 gap-3 shrink-0">
         <button
           type="button"
@@ -189,7 +216,10 @@ export default function MobileTodayTripPage({
         )}
       </div>
 
-      {/* 2. Timeline List View */}
+      {/* 2. 当日路线地图预览 */}
+      <TripDayMap items={items} places={places} className="h-44" />
+
+      {/* 3. Timeline List View */}
       <div className="space-y-3.5 pt-1">
         <span className="text-[12px] font-black text-slate-400 uppercase tracking-widest block">今日自驾节点路线 ({items.length})</span>
         

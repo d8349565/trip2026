@@ -490,8 +490,13 @@ export default function App() {
   // Add Trip
   const handleCreateTrip = async (tripData: Partial<Trip>) => {
     try {
-      await api.createTrip(tripData, currentUser?.id);
+      const created = await api.createTrip(tripData, currentUser?.id);
       await reloadAllData();
+      // 创建完自动激活新行程，落到日程编排页
+      setActiveTripId(created.id);
+      localStorage.setItem('activeTripId', created.id);
+      setMobileTripTab('manage');
+      notify('行程创建成功，开始编排每天的路线吧。', 'success');
     } catch (e) {
       notify('行程创建失败，请检查日期和必填信息。', 'error');
     }
@@ -533,6 +538,15 @@ export default function App() {
       await reloadAllData();
     } catch (e) {
       notify('删除失败，请重试。', 'error');
+    }
+  };
+
+  const handleReorderTripItems = async (items: { id: string; sort_order: number }[]) => {
+    try {
+      await api.reorderTripItems(items);
+      await reloadAllData();
+    } catch (e) {
+      notify('排序保存失败，请重试。', 'error');
     }
   };
 
@@ -908,6 +922,7 @@ export default function App() {
                   onUpdateTripDay={handleUpdateTripDay}
                   onAddTripItem={handleAddTripItem}
                   onDeleteTripItem={handleDeleteTripItem}
+                  onReorderTripItems={handleReorderTripItems}
                 />
               ) : (
                 <MobileGuideListPage

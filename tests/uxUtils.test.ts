@@ -7,9 +7,11 @@ import { formatMediaDate, groupMediaByDate, sortMediaByDateDesc } from '../src/u
 import MobileBottomNav from '../src/components/mobile/MobileBottomNav';
 import MobileCreateSheet from '../src/components/mobile/MobileCreateSheet';
 import MobileMapPage from '../src/components/mobile/MobileMapPage';
+import MobileTripOverviewPage from '../src/components/mobile/MobileTripOverviewPage';
+import MobileTodayTripPage from '../src/components/mobile/MobileTodayTripPage';
 import { formatPlaceRating, mergeVisitRatings } from '../src/utils/placeRating';
 import { getDefaultTripDateRange, isValidTripDateRange } from '../src/utils/tripDates';
-import type { Media, Place, Visit } from '../src/types';
+import type { Media, Place, Visit, Trip, TripDay, TripItem } from '../src/types';
 
 function media(id: string, capturedAt: string): Media {
   return {
@@ -194,4 +196,75 @@ test('mobile create sheet only exposes actions that start an immediate creation 
   assert.doesNotMatch(html, /id="m_act_trip"/);
   assert.doesNotMatch(html, /id="m_act_checklist"/);
   assert.doesNotMatch(html, /id="m_act_guide"/);
+});
+
+test('mobile trip overview renames sub-tabs and renders day map and reorder buttons', () => {
+  const trip: Trip = {
+    id: 't1', title: '测试行程', start_date: '2026-09-01', end_date: '2026-09-03',
+    origin: '广州', destination_summary: '潮州', travel_mode: 'drive', participants: '',
+    status: 'upcoming', visibility: 'shared', created_by: 'u1',
+    created_at: '', updated_at: '',
+  } as Trip;
+  const day: TripDay = {
+    id: 'd1', trip_id: 't1', day_number: 1, date: '2026-09-01', title: '第 1 天行程',
+  } as TripDay;
+  const place: Place = {
+    id: 'p1', name: '龙潭溪', category_id: 'stream', latitude: 28.5, longitude: 113.9,
+    coordinate_system: 'GCJ02', address: '湖南', status: 'want_to_go', visibility: 'shared',
+    favorite: false, recommended: false, created_by: 'u1', created_at: '', updated_at: '',
+  } as Place;
+  const item: TripItem = {
+    id: 'i1', trip_day_id: 'd1', type: 'play', place_id: 'p1', title: '龙潭溪',
+    priority: 'must', status: 'pending', sort_order: 1,
+  } as TripItem;
+
+  const html = renderToStaticMarkup(React.createElement(MobileTripOverviewPage, {
+    trips: [trip],
+    allDays: [day],
+    allItems: [item],
+    places: [place],
+    activeTrip: trip,
+    onSelectTrip: () => {},
+    onDeleteTrip: () => {},
+    onCreateTrip: () => {},
+    onUpdateTripDay: () => {},
+    onAddTripItem: () => {},
+    onDeleteTripItem: () => {},
+    onReorderTripItems: () => {},
+  }));
+  assert.match(html, /日程编排/);
+  assert.match(html, /行程管理/);
+  assert.doesNotMatch(html, /全部日程/);
+  assert.doesNotMatch(html, /规划总览/);
+  assert.match(html, /当日行程路线地图/);
+  assert.match(html, /aria-label="上移"/);
+  assert.match(html, /aria-label="下移"/);
+});
+
+test('mobile today trip page shows countdown for upcoming trip', () => {
+  const future = new Date();
+  future.setDate(future.getDate() + 5);
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
+  const trip: Trip = {
+    id: 't1', title: '未来行程', start_date: fmt(future), end_date: fmt(new Date(future.getTime() + 86400000 * 2)),
+    origin: '', destination_summary: '', travel_mode: 'drive', participants: '',
+    status: 'upcoming', visibility: 'shared', created_by: 'u1',
+    created_at: '', updated_at: '',
+  } as Trip;
+  const day: TripDay = {
+    id: 'd1', trip_id: 't1', day_number: 1, date: fmt(future), title: '第 1 天行程',
+  } as TripDay;
+  const html = renderToStaticMarkup(React.createElement(MobileTodayTripPage, {
+    activeTrip: trip,
+    activeDay: day,
+    items: [],
+    places: [],
+    onUpdateItemStatus: () => {},
+    onNavigateToPlace: () => {},
+    onOpenTripSelector: () => {},
+    onOpenCreateTrip: () => {},
+    onOpenDaySelector: () => {},
+    allDays: [day],
+  }));
+  assert.match(html, /距出发还有/);
 });

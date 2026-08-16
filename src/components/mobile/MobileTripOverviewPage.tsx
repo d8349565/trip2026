@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { Trip, TripDay, TripItem, Place } from '../../types';
 import { 
   Calendar, MapPin, Plus, Trash2, Edit2, Check, Clock, 
-  Car, Compass, DollarSign, Cloud, CheckSquare, Sparkles, X 
+  Car, Compass, DollarSign, Cloud, CheckSquare, Sparkles, X,
+  ArrowUp, ArrowDown
 } from 'lucide-react';
 import { getDefaultTripDateRange, isValidTripDateRange } from '../../utils/tripDates';
+import TripDayMap from './TripDayMap';
 
 interface MobileTripOverviewPageProps {
   trips: Trip[];
@@ -19,6 +21,7 @@ interface MobileTripOverviewPageProps {
   onUpdateTripDay: (dayId: string, data: Partial<TripDay>) => void;
   onAddTripItem: (dayId: string, item: Partial<TripItem>) => void;
   onDeleteTripItem: (itemId: string) => void;
+  onReorderTripItems?: (items: { id: string; sort_order: number }[]) => void;
 }
 
 export default function MobileTripOverviewPage({
@@ -34,6 +37,7 @@ export default function MobileTripOverviewPage({
   onUpdateTripDay,
   onAddTripItem,
   onDeleteTripItem,
+  onReorderTripItems,
 }: MobileTripOverviewPageProps) {
   const [subTab, setSubTab] = useState<'days' | 'trips'>('days');
 
@@ -151,21 +155,21 @@ export default function MobileTripOverviewPage({
   return (
     <div className="space-y-4 select-none">
       
-      {/* Tab Switchers: 全部日程 vs 总览 */}
+      {/* Tab Switchers: 日程编排 vs 行程管理 */}
       <div className="bg-slate-100 p-1 rounded-xl flex">
         <button
           id="m_trip_subtab_days"
           onClick={() => setSubTab('days')}
           className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${subTab === 'days' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
         >
-          全部日程 🗓️
+          日程编排 🗓️
         </button>
         <button
           id="m_trip_subtab_trips"
           onClick={() => setSubTab('trips')}
           className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${subTab === 'trips' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
         >
-          规划总览 🚗
+          行程管理 🚗
         </button>
       </div>
 
@@ -298,6 +302,9 @@ export default function MobileTripOverviewPage({
                     )}
                   </div>
 
+                  {/* 当日路线地图预览 */}
+                  <TripDayMap items={dayItems} places={places} className="h-48" />
+
                   {/* Nodes listing & add item trigger */}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
@@ -388,9 +395,9 @@ export default function MobileTripOverviewPage({
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {dayItems.map(item => (
+                        {dayItems.map((item, idx) => (
                           <div key={item.id} className="bg-white rounded-xl p-3 border border-slate-100 shadow-xs flex justify-between items-center gap-3">
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5">
                                 <span className="font-mono text-xs text-blue-600 font-extrabold">{item.start_time || '09:00'}</span>
                                 <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-1 py-0.5 rounded-md">
@@ -400,17 +407,51 @@ export default function MobileTripOverviewPage({
                               <h5 className="font-bold text-slate-800 text-xs mt-1 truncate">{item.title}</h5>
                             </div>
                             
-                            <button
-                              id={`m_delete_item_${item.id}`}
-                              onClick={() => {
-                                if (confirm('确定要删除该行程节点吗？')) {
-                                  onDeleteTripItem(item.id);
-                                }
-                              }}
-                              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 outline-none transition-colors hover:bg-red-50 hover:text-red-500"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              {onReorderTripItems && (
+                                <>
+                                  <button
+                                    type="button"
+                                    aria-label="上移"
+                                    disabled={idx === 0}
+                                    onClick={() => {
+                                      if (idx === 0) return;
+                                      const reordered = [...dayItems];
+                                      [reordered[idx - 1], reordered[idx]] = [reordered[idx], reordered[idx - 1]];
+                                      onReorderTripItems(reordered.map((it, i) => ({ id: it.id, sort_order: i + 1 })));
+                                    }}
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 outline-none transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30"
+                                  >
+                                    <ArrowUp size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label="下移"
+                                    disabled={idx === dayItems.length - 1}
+                                    onClick={() => {
+                                      if (idx === dayItems.length - 1) return;
+                                      const reordered = [...dayItems];
+                                      [reordered[idx], reordered[idx + 1]] = [reordered[idx + 1], reordered[idx]];
+                                      onReorderTripItems(reordered.map((it, i) => ({ id: it.id, sort_order: i + 1 })));
+                                    }}
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 outline-none transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30"
+                                  >
+                                    <ArrowDown size={14} />
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                id={`m_delete_item_${item.id}`}
+                                onClick={() => {
+                                  if (confirm('确定要删除该行程节点吗？')) {
+                                    onDeleteTripItem(item.id);
+                                  }
+                                }}
+                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 outline-none transition-colors hover:bg-red-50 hover:text-red-500"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>

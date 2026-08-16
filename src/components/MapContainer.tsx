@@ -22,6 +22,7 @@ import {
   shouldFitAllPlacesInitially,
 } from '../utils/mapViewport';
 import type { MapLocation, Place, PlaceCategory, Media, MediaUploadInput } from '../types';
+import { loadAmap, type AMapInstance, type AMapFeature, type AMapGlobal } from '../utils/amapLoader';
 
 /** 一张「本地已处理、尚未落库」的照片，等待用户在地图上确认位置与归属后一并保存。 */
 export interface PendingPhotoUpload {
@@ -84,29 +85,6 @@ interface MapContainerProps {
 type AMapLngLat = { getLng: () => number; getLat: () => number };
 type AMapEvent = { lnglat?: AMapLngLat };
 type AMapMarker = { on: (event: string, handler: (event: AMapEvent) => void) => void };
-type AMapFeature = 'bg' | 'point' | 'road' | 'building';
-type AMapInstance = {
-  add: (overlay: unknown | unknown[]) => void;
-  remove: (overlay: unknown | unknown[]) => void;
-  destroy: () => void;
-  getZoom: () => number;
-  setZoom: (zoom: number) => void;
-  setZoomAndCenter: (zoom: number, center: [number, number], immediately?: boolean) => void;
-  setCenter: (center: [number, number]) => void;
-  setFitView: (
-    overlays?: unknown[],
-    immediately?: boolean,
-    avoid?: [number, number, number, number],
-    maxZoom?: number,
-  ) => void;
-  setFeatures: (features: AMapFeature[]) => void;
-  on: (event: string, handler: (event: AMapEvent) => void) => void;
-  containerToLngLat: (pixel: { getX?: () => number; getY?: () => number }) => AMapLngLat | null;
-};
-type AMapGlobal = {
-  Map: new (container: HTMLDivElement, options: Record<string, unknown>) => AMapInstance;
-  Marker: new (options: Record<string, unknown>) => AMapMarker;
-};
 
 // 标准底图保留河流、溪流等水系的清晰对比，便于溯溪地点选点和浏览。
 export const AMAP_TRAVEL_STYLE = 'amap://styles/normal';
@@ -133,31 +111,6 @@ declare global {
     AMap?: AMapGlobal;
     _AMapSecurityConfig?: { securityJsCode: string };
   }
-}
-
-let amapLoader: Promise<AMapGlobal> | undefined;
-
-async function loadAmap(): Promise<AMapGlobal> {
-  if (window.AMap) return window.AMap;
-  if (amapLoader) return amapLoader;
-  amapLoader = fetch('/api/map/config')
-    .then(async (response) => {
-      if (!response.ok) throw new Error('高德地图配置不可用');
-      return response.json() as Promise<{ webKey: string; securityJsCode: string }>;
-    })
-    .then(({ webKey, securityJsCode }) => new Promise<AMapGlobal>((resolve, reject) => {
-      window._AMapSecurityConfig = { securityJsCode };
-      const script = document.createElement('script');
-      script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(webKey)}`;
-      script.async = true;
-      script.onload = () => window.AMap ? resolve(window.AMap) : reject(new Error('高德地图加载失败'));
-      script.onerror = () => reject(new Error('无法连接高德地图服务'));
-      document.head.appendChild(script);
-    }));
-  return amapLoader.catch((error) => {
-    amapLoader = undefined;
-    throw error;
-  });
 }
 
 const CATEGORY_EMOJI: Partial<Record<PlaceCategory, string>> = {
